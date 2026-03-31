@@ -3,3 +3,4 @@ requests
 flask
 scikit-learn
 joblib
+websocket-client
