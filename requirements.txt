@@ -1,4 +1,5 @@
 numpy
+requests
+flask
 scikit-learn
 joblib
-requests
