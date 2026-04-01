@@ -145,4 +145,11 @@ def obtener_senal(rsi, macd, senal_macd, histograma, dir_vela,
     if puntuacion < 0 and ema_tend > 0:
         return None, puntuacion, []
 
-    return ("call" if puntuacion > 0 else "pu]t"), puntuacion, [
+    # ===== DECISIÓN FINAL =====
+def decision_final(puntuacion):
+    if puntuacion > 0:
+        return "call", puntuacion
+    elif puntuacion < 0:
+        return "put", puntuacion
+    else:
+        return None, puntuacion
