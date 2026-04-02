@@ -82,6 +82,7 @@ def bot():
 
     while True:
         try:
+            print("💓 BOT CORRIENDO...")
             # Modo defensa activo
             if modo_defensa:
                 if time.time() < tiempo_reanudacion:
