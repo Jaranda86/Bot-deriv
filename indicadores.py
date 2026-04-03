@@ -1,20 +1,33 @@
-def analizar_indicadores(velas):
+import random
+
+# ==============================
+# 📊 ANALIZAR MERCADO
+# ==============================
+
+def analizar_mercado(bot, par):
+
+    # 🔥 Simulación de indicadores (después lo mejoramos con datos reales)
+
     puntuacion = 0
 
-    # 🔧 VALORES SIMULADOS (ajústalos si ya los calculas)
-    dir_vela = velas.get("dir_vela", 0)
-    bb_pos = velas.get("bb_pos", 0.5)
-    stoch_k = velas.get("stoch_k", 50)
-    ema_tend = velas.get("ema_tend", 0)
+    # simulación de señales
+    dir_vela = random.choice([-1, 1])
+    bb_pos = random.random()
+    stoch_k = random.randint(0, 100)
+    ema_tend = random.choice([-1, 1])
+
+    # ==============================
+    # 🧠 LÓGICA
+    # ==============================
 
     if dir_vela == 1:
         puntuacion += 1
-    elif dir_vela == -1:
+    else:
         puntuacion -= 1
 
-    if bb_pos < 0.1:
+    if bb_pos < 0.2:
         puntuacion += 1
-    elif bb_pos > 0.9:
+    elif bb_pos > 0.8:
         puntuacion -= 1
 
     if stoch_k < 20:
@@ -24,25 +37,18 @@ def analizar_indicadores(velas):
 
     if ema_tend == 1:
         puntuacion += 1
-    elif ema_tend == -1:
+    else:
         puntuacion -= 1
 
-    if abs(puntuacion) < 3:
-        return None, puntuacion, []
+    # ==============================
+    # 🎯 DECISIÓN
+    # ==============================
 
-    if puntuacion > 0 and ema_tend < 0:
-        return None, puntuacion, []
-
-    if puntuacion < 0 and ema_tend > 0:
-        return None, puntuacion, []
-
-    return ("call" if puntuacion > 0 else "put"), puntuacion, []
-
-
-def decision_final(puntuacion):
-    if puntuacion > 0:
+    if puntuacion >= 3:
         return "call", puntuacion
-    elif puntuacion < 0:
+
+    elif puntuacion <= -3:
         return "put", puntuacion
+
     else:
         return None, puntuacion
