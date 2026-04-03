@@ -8,8 +8,8 @@ from indicadores import analizar_mercado
 # 🔐 CONFIG
 # ==============================
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TOKEN = os.getenv("8329264709:AAHyKe68ERfMr37EM8qn33KzMJuCuV6KeIM")
+CHAT_ID = os.getenv("6826449033")
 
 MONTO = 1
 MAX_PERDIDAS = 3
