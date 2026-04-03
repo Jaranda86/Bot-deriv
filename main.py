@@ -1,111 +1,120 @@
 import time
+import os
+import requests
 from deriv_api import DerivBot
-from indicadores import analizar_indicadores, decision_final
+from indicadores import analizar_mercado
 
-# ================= CONFIG =================
-PARES = ["R_100", "R_50", "R_75"]
-TIEMPO_ESPERA = 10  # segundos entre ciclos
-MAX_PERDIDAS_CONSEC = 3
-TIEMPO_PAUSA = 60  # segundos en modo defensa
+# ==============================
+# 🔐 CONFIG
+# ==============================
 
-# ================= VARIABLES =================
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+MONTO = 1
+MAX_PERDIDAS = 3
+PAUSA_DEFENSA = 300  # 5 minutos
+
+pares = ["R_50", "R_75", "R_100"]
+
 perdidas_consecutivas = 0
-modo_defensa = False
-tiempo_reanudacion = 0
 
-# ================= FUNCION ANALISIS =================
-def analizar_par(bot, par):
-    global perdidas_consecutivas, modo_defensa, tiempo_reanudacion
+
+# ==============================
+# 📲 TELEGRAM
+# ==============================
+
+def enviar_telegram(msg):
+    if not TOKEN or not CHAT_ID:
+        print("⚠️ Telegram no configurado")
+        return
+
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    data = {
+        "chat_id": CHAT_ID,
+        "text": msg
+    }
 
     try:
-        print(f"\n🔍 Analizando {par}...")
-
-        # Obtener datos del mercado
-        velas = bot.obtener_velas(par)
-
-        if velas is None:
-            print(f"⚠️ No hay datos de {par}")
-            return
-
-        # Analizar indicadores
-        decision, puntuacion, detalles = analizar_indicadores(velas)
-
-        print(f"📊 {par} | puntuación: {puntuacion}")
-
-        if decision is None:
-            print("❌ Sin señal clara")
-            return
-
-        # Confirmar decisión final
-        decision, puntuacion = decision_final(puntuacion)
-
-        if decision is None:
-            print("⛔ Señal filtrada")
-            return
-
-        print(f"🚀 Señal: {decision.upper()} en {par}")
-
-        # Enviar a Telegram
-        bot.enviar_telegram(f"📈 {par} → {decision.upper()} | Score: {puntuacion}")
-
-        # Ejecutar operación
-        resultado = bot.operar(par, decision)
-
-        if resultado:
-            print("✅ GANADA")
-            perdidas_consecutivas = 0
-        else:
-            print("❌ PERDIDA")
-            perdidas_consecutivas += 1
-
-        # Activar modo defensa
-        if perdidas_consecutivas >= MAX_PERDIDAS_CONSEC:
-            modo_defensa = True
-            tiempo_reanudacion = time.time() + TIEMPO_PAUSA
-            print("🛑 MODO DEFENSA ACTIVADO")
-
-    except Exception as e:
-        print(f"⚠️ Error en {par}: {e}")
+        requests.post(url, data=data)
+    except:
+        print("❌ Error Telegram")
 
 
-# ================= BOT PRINCIPAL =================
+# ==============================
+# 📊 OPERAR PAR
+# ==============================
+
+def operar_par(bot, par):
+    global perdidas_consecutivas
+
+    direccion, puntuacion = analizar_mercado(bot, par)
+
+    print(f"🔍 {par} | Score: {puntuacion}")
+
+    if direccion is None:
+        print("❌ Sin señal clara")
+        return
+
+    print(f"📊 Señal: {direccion.upper()} en {par}")
+
+    enviar_telegram(f"📊 {par} → {direccion.upper()} | Score: {puntuacion}")
+
+    resultado = bot.comprar(par, direccion, MONTO)
+
+    if resultado is None:
+        print("❌ Error al ejecutar trade")
+        return
+
+    if resultado == "win":
+        print("✅ GANADA")
+        enviar_telegram(f"✅ GANADA en {par}")
+        perdidas_consecutivas = 0
+
+    else:
+        print("❌ PERDIDA")
+        enviar_telegram(f"❌ PERDIDA en {par}")
+        perdidas_consecutivas += 1
+
+
+# ==============================
+# 🧠 BOT PRINCIPAL
+# ==============================
+
 def bot():
-    global modo_defensa, tiempo_reanudacion
+    global perdidas_consecutivas
 
     bot = DerivBot()
 
     if not bot.connect():
-        print("❌ Error conexión con Deriv")
+        print("❌ Error conexión Deriv")
+        enviar_telegram("❌ Error conexión Deriv")
         return
 
-    print("🏦 BOT HEDGE FUND INICIADO 🚀")
+    print("🤖 BOT DEMO INICIADO")
+    enviar_telegram("🤖 BOT DEMO INICIADO")
 
     while True:
-        try:
-            print("💓 BOT CORRIENDO...")
-            # Modo defensa activo
-            if modo_defensa:
-                if time.time() < tiempo_reanudacion:
-                    print("🛑 En pausa por seguridad...")
-                    time.sleep(10)
-                    continue
-                else:
-                    print("✅ Reanudando operaciones")
-                    modo_defensa = False
+        for par in pares:
 
-            # Analizar todos los pares
-            for par in PARES:
-                analizar_par(bot, par)
-                time.sleep(2)
+            # 🛑 modo defensa
+            if perdidas_consecutivas >= MAX_PERDIDAS:
+                print("🛑 MODO DEFENSA ACTIVADO")
+                enviar_telegram("🛑 Modo defensa activado (pausa 5 min)")
+                time.sleep(PAUSA_DEFENSA)
+                perdidas_consecutivas = 0
 
-            # Espera entre ciclos
-            time.sleep(TIEMPO_ESPERA)
+            try:
+                operar_par(bot, par)
+            except Exception as e:
+                print(f"❌ Error en {par}: {e}")
 
-        except Exception as e:
-            print(f"⚠️ Error general: {e}")
-            time.sleep(5)
+            time.sleep(10)
 
 
-# ================= INICIO =================
+# ==============================
+# 🚀 RUN
+# ==============================
+
 if __name__ == "__main__":
     bot()
