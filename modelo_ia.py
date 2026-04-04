@@ -1,35 +1,37 @@
 import csv
 import os
 
-ARCHIVO = "historial.csv"
+archivo = "historial.csv"
 
-def guardar_operacion(par, decision, score, resultado):
-    existe = os.path.isfile(ARCHIVO)
+def guardar_operacion(par, score, resultado):
+    existe = os.path.isfile(archivo)
 
-    with open(ARCHIVO, "a", newline="") as f:
+    with open(archivo, mode='a', newline='') as f:
         writer = csv.writer(f)
 
         if not existe:
-            writer.writerow(["par", "decision", "score", "resultado"])
+            writer.writerow(["par", "score", "resultado"])
 
-        writer.writerow([par, decision, score, resultado])
+        writer.writerow([par, score, resultado])
 
 
-def analizar_historial():
-    if not os.path.exists(ARCHIVO):
-        return 0
+def calcular_confianza(par, score):
+    if not os.path.isfile(archivo):
+        return 50
 
     total = 0
-    ganadas = 0
+    aciertos = 0
 
-    with open(ARCHIVO, "r") as f:
+    with open(archivo, mode='r') as f:
         reader = csv.DictReader(f)
+
         for row in reader:
-            total += 1
-            if row["resultado"] == "win":
-                ganadas += 1
+            if row["par"] == par:
+                total += 1
+                if row["resultado"] == "win":
+                    aciertos += 1
 
     if total == 0:
-        return 0
+        return 50
 
-    return ganadas / total
+    return round((aciertos / total) * 100, 2)
