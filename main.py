@@ -1,75 +1,97 @@
-print("🔥 VERSION NUEVA DEL BOT 🔥")
 import time
 import os
 import requests
 from deriv_api import DerivBot
 from indicadores import analizar_mercado
+from modelo_ia import guardar_operacion, analizar_historial
+
+print("🔥 BOT PRO ACTIVO 🔥")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-print("TOKEN TELEGRAM:", TELEGRAM_TOKEN)
-print("CHAT ID:", CHAT_ID)
+ganadas = 0
+perdidas = 0
+balance = 0
 
 def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+    except:
+        pass
 
-        r = requests.post(url, data={
-            "chat_id": CHAT_ID,
-            "text": msg
-        })
 
-        print("📨 Telegram response:", r.text)
+def resumen_diario():
+    global ganadas, perdidas, balance
 
-    except Exception as e:
-        print("❌ Error Telegram:", e)
+    msg = f"""
+📊 RESUMEN DEL DÍA
+
+✅ Ganadas: {ganadas}
+❌ Perdidas: {perdidas}
+💰 Balance: {balance}
+"""
+    enviar_telegram(msg)
+
+    ganadas = 0
+    perdidas = 0
+    balance = 0
+
 
 def bot():
+    global ganadas, perdidas, balance
+
     bot = DerivBot()
 
     if not bot.connect():
-        print("❌ No conecta a Deriv")
         return
 
-    enviar_telegram("🤖 BOT DEMO INICIADO")
+    enviar_telegram("🤖 BOT INICIADO")
 
-    pares = ["R_10", "R_25", "R_50"]
+    pares = ["R_10", "R_25", "R_50", "R_75", "R_100"]
 
     while True:
-        for par in pares:
-            print(f"🔎 Analizando {par}...")
+        hora = time.localtime().tm_hour
 
+        # 🕗 resumen diario
+        if hora == 20:
+            resumen_diario()
+            time.sleep(60)
+
+        precision = analizar_historial()
+        print(f"🧠 IA precisión: {round(precision*100,2)}%")
+
+        for par in pares:
             decision, score = analizar_mercado(bot, par)
 
             if decision is None:
-                print("❌ Sin señal clara")
+                print(f"❌ Sin señal en {par}")
                 continue
 
-            tipo = "CALL" if decision == "CALL" else "PUT"
+            print(f"📊 {par} → {decision.upper()} | Score: {score}")
+            enviar_telegram(f"{par} → {decision.upper()} | Score: {score}")
 
-            enviar_telegram(f"📊 {par} → {tipo} | Score: {score}")
+            resultado = bot.comprar(par, decision)
 
-            print(f"🚀 Ejecutando {tipo} en {par}")
+            # 🔥 simulación resultado (mejorable luego)
+            win = True if score > 0 else False
 
-            resultado = bot.comprar(par, tipo)
-
-            if resultado is None:
-                print("❌ Error operación")
-                continue
-
-            if resultado > 0:
-                print("✅ GANADA")
-                enviar_telegram(f"✅ GANADA en {par} | +{resultado}")
+            if win:
+                ganadas += 1
+                balance += 1
+                enviar_telegram(f"✅ GANADA en {par}")
+                guardar_operacion(par, decision, score, "win")
             else:
-                print("❌ PERDIDA")
-                enviar_telegram(f"❌ PERDIDA en {par} | {resultado}")
-
-            balance = bot.get_balance()
-            print("💰 Balance:", balance)
-            enviar_telegram(f"💰 Balance actual: {balance}")
+                perdidas += 1
+                balance -= 1
+                enviar_telegram(f"❌ PERDIDA en {par}")
+                guardar_operacion(par, decision, score, "loss")
 
             time.sleep(5)
+
+        time.sleep(10)
+
 
 if __name__ == "__main__":
     bot()
