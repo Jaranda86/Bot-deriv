@@ -72,7 +72,7 @@ def bot():
             print(f"📊 {par} → {decision.upper()} | Score: {score}")
             enviar_telegram(f"{par} → {decision.upper()} | Score: {score}")
 
-            resultado = bot.comprar(par, decision)
+            resultado = bot.comprar(par, decision, monto=10)
 
             # 🔥 simulación resultado (mejorable luego)
             win = True if score > 0 else False
