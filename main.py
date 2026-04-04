@@ -1,3 +1,4 @@
+print("🔥 VERSION NUEVA DEL BOT 🔥")
 import time
 import os
 import requests
