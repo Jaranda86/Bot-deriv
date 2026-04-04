@@ -67,7 +67,10 @@ def ejecutar_bot():
                     continue
 
                 # 🎯 filtro fuerte
-                if score >= 4 and confianza >= 60:
+                
+                print(f"DEBUG → {par} | score: {score} | tipo: {tipo} | IA: {confianza}")
+                
+                if tipo is not None and score >= 3 and confianza >= 55:
 
                     enviar_telegram(f"📊 {par} → {tipo.upper()} | Score: {score} | IA: {confianza}%")
 
@@ -121,9 +124,11 @@ def ejecutar_bot():
 
                 time.sleep(3600)
 
-        except Exception as e:
-            print("❌ Error general:", e)
-            time.sleep(5)
+except Exception as e:
+    error_msg = f"❌ ERROR BOT: {str(e)}"
+    print(error_msg)
+    enviar_telegram(error_msg)
+    time.sleep(5)
 
 # =========================
 # 🔄 LOOP GLOBAL
