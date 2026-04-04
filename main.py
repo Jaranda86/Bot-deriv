@@ -1,6 +1,7 @@
 import time
 import os
 import requests
+time.sleep(5)
 from deriv_api import DerivBot
 from indicadores import analizar_mercado
 from modelo_ia import guardar_operacion, analizar_historial
