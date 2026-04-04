@@ -3,7 +3,6 @@ import random
 def analizar_mercado(bot, par):
     puntuacion = 0
 
-    # simulación inteligente (base IA simple)
     dir_vela = random.choice([-1, 1])
     bb_pos = random.random()
     stoch_k = random.randint(0, 100)
@@ -29,10 +28,11 @@ def analizar_mercado(bot, par):
     else:
         puntuacion -= 1
 
-    if abs(puntuacion) < 3:
+    # 🔥 FILTRO PRO (solo señales fuertes)
+    if abs(puntuacion) < 4:
         return None, puntuacion
 
     if puntuacion > 0:
-        return "CALL", puntuacion
+        return "call", puntuacion
     else:
-        return "PUT", puntuacion
+        return "put", puntuacion
