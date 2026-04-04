@@ -10,9 +10,16 @@ CHAT_ID = os.getenv("CHAT_ID")
 def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
-    except:
-        pass
+
+        r = requests.post(url, data={
+            "chat_id": CHAT_ID,
+            "text": msg
+        })
+
+        print("📨 Telegram response:", r.text)
+
+    except Exception as e:
+        print("❌ Error Telegram:", e)
 
 def bot():
     bot = DerivBot()
