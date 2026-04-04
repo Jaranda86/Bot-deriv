@@ -45,7 +45,7 @@ def bot():
 
     bot = DerivBot()
 
-    if not bot.connect():
+if not bot.connect():
     print("❌ No conecta a Deriv")
     time.sleep(10)  # 🔥 evita rate limit
     return
