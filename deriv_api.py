@@ -1,7 +1,7 @@
 import websocket
 import json
-import os
 import time
+import os
 
 class DerivBot:
     def __init__(self):
@@ -10,18 +10,16 @@ class DerivBot:
 
     def connect(self):
         try:
-            self.ws = websocket.create_connection(
-                "wss://ws.derivws.com/websockets/v3?app_id=1089"
-            )
+            self.ws = websocket.create_connection("wss://ws.derivws.com/websockets/v3?app_id=1089")
 
             self.ws.send(json.dumps({
                 "authorize": self.token
             }))
 
-            res = json.loads(self.ws.recv())
+            response = json.loads(self.ws.recv())
 
-            if "error" in res:
-                print("❌ Error token:", res)
+            if "error" in response:
+                print("❌ Error autorización:", response["error"]["message"])
                 return False
 
             print("✅ Conectado a Deriv")
@@ -31,19 +29,25 @@ class DerivBot:
             print("❌ Error conexión:", e)
             return False
 
-    def operar(self, symbol, action):
+    def get_balance(self):
         try:
-            tipo = "CALL" if action == "call" else "PUT"
+            self.ws.send(json.dumps({"balance": 1}))
+            response = json.loads(self.ws.recv())
+            return response["balance"]["balance"]
+        except:
+            return 0
 
-            # 🔹 PASO 1: PEDIR PROPUESTA
+    def comprar(self, symbol, tipo):
+        try:
+            # 1. pedir propuesta
             self.ws.send(json.dumps({
                 "proposal": 1,
                 "amount": 1,
                 "basis": "stake",
                 "contract_type": tipo,
                 "currency": "USD",
-                "duration": 1,
-                "duration_unit": "m",
+                "duration": 5,
+                "duration_unit": "t",
                 "symbol": symbol
             }))
 
@@ -51,28 +55,27 @@ class DerivBot:
 
             if "error" in proposal:
                 print("❌ Error proposal:", proposal)
-                return False
+                return None
 
             proposal_id = proposal["proposal"]["id"]
 
-            # 🔹 PASO 2: COMPRAR CONTRATO REAL
+            # 2. comprar
             self.ws.send(json.dumps({
                 "buy": proposal_id,
                 "price": 1
             }))
 
             buy = json.loads(self.ws.recv())
+            print("📩 RESPUESTA COMPRA:", buy)
 
             if "error" in buy:
                 print("❌ Error compra:", buy)
-                return False
+                return None
 
             contract_id = buy["buy"]["contract_id"]
 
-            print(f"📄 Contract ID: {contract_id}")
-
-            # 🔹 ESPERAR RESULTADO
-            time.sleep(65)
+            # 3. esperar resultado
+            time.sleep(6)
 
             self.ws.send(json.dumps({
                 "proposal_open_contract": 1,
@@ -81,13 +84,14 @@ class DerivBot:
 
             result = json.loads(self.ws.recv())
 
-            contract = result.get("proposal_open_contract", {})
-            profit = contract.get("profit", 0)
+            if "error" in result:
+                print("❌ Error resultado:", result)
+                return None
 
-            print(f"📊 Profit: {profit}")
+            profit = result["proposal_open_contract"]["profit"]
 
-            return profit > 0
+            return profit
 
         except Exception as e:
-            print("❌ Error operar:", e)
-            return False
+            print("❌ Error operación:", e)
+            return None
