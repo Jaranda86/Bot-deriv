@@ -29,7 +29,7 @@ class DerivBot:
             print("❌ Error conexión:", e)
             return False
 
-    def comprar(self, par, tipo, monto=1):
+    def comprar(self, par, tipo, monto=10):
         try:
             accion = "CALL" if tipo == "call" else "PUT"
 
