@@ -45,7 +45,9 @@ def bot():
     bot = DerivBot()
 
     if not bot.connect():
-        return
+    print("❌ No conecta a Deriv")
+    time.sleep(10)  # 🔥 evita rate limit
+    return
 
     enviar_telegram("🤖 BOT INICIADO")
 
