@@ -7,6 +7,9 @@ from indicadores import analizar_mercado
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+print("TOKEN TELEGRAM:", TELEGRAM_TOKEN)
+print("CHAT ID:", CHAT_ID)
+
 def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
