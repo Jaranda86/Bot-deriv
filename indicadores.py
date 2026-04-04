@@ -1,9 +1,9 @@
 import random
 
 def analizar_mercado(bot, par):
-
     puntuacion = 0
 
+    # simulación inteligente (base IA simple)
     dir_vela = random.choice([-1, 1])
     bb_pos = random.random()
     stoch_k = random.randint(0, 100)
@@ -26,13 +26,13 @@ def analizar_mercado(bot, par):
 
     if ema_tend == 1:
         puntuacion += 1
-    elif ema_tend == -1:
+    else:
         puntuacion -= 1
 
     if abs(puntuacion) < 3:
         return None, puntuacion
 
     if puntuacion > 0:
-        return "call", puntuacion
+        return "CALL", puntuacion
     else:
-        return "put", puntuacion
+        return "PUT", puntuacion
