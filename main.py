@@ -1,3 +1,4 @@
+print("🔥 ARRANCÓ EL BOT 🔥")
 import time
 import requests
 import os
