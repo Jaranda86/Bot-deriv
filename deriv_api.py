@@ -1,7 +1,6 @@
 import websocket
 import json
 import os
-import time
 
 class DerivBot:
 
@@ -9,43 +8,29 @@ class DerivBot:
         self.ws = None
         self.token = os.getenv("DERIV_TOKEN")
 
-    # =========================
-    # CONEXIÓN
-    # =========================
-
     def conectar(self):
         try:
-            print("🔌 Conectando a Deriv...")
-
             url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
             self.ws = websocket.create_connection(url)
-
-            print("✅ WebSocket abierto")
 
             self.ws.send(json.dumps({
                 "authorize": self.token
             }))
 
             response = json.loads(self.ws.recv())
-            print("📩 Respuesta:", response)
 
             if "error" in response:
-                print("❌ Error autorización:", response["error"])
+                print("Error:", response)
                 return False
 
-            print("✅ AUTORIZADO")
+            print("Conectado a Deriv")
             return True
 
         except Exception as e:
-            print("❌ Error conexión:", e)
+            print("Error conexión:", e)
             return False
 
-    # =========================
-    # VELAS REALES
-    # =========================
-
     def get_candles(self, symbol):
-
         try:
             self.ws.send(json.dumps({
                 "ticks_history": symbol,
@@ -62,16 +47,11 @@ class DerivBot:
                 return response["candles"]
 
         except Exception as e:
-            print("❌ Error velas:", e)
+            print("Error velas:", e)
 
         return []
 
-    # =========================
-    # COMPRA
-    # =========================
-
     def comprar(self, par, tipo, monto):
-
         try:
             accion = "CALL" if tipo == "call" else "PUT"
 
@@ -90,22 +70,16 @@ class DerivBot:
             }))
 
             result = json.loads(self.ws.recv())
-            print("🟢 COMPRA:", result)
 
             if "buy" in result:
                 return result["buy"]["contract_id"]
 
         except Exception as e:
-            print("❌ Error compra:", e)
+            print("Error compra:", e)
 
         return None
 
-    # =========================
-    # RESULTADO
-    # =========================
-
     def check_result(self, contract_id):
-
         try:
             self.ws.send(json.dumps({
                 "proposal_open_contract": 1,
@@ -122,6 +96,6 @@ class DerivBot:
                         return contrato["profit"]
 
         except Exception as e:
-            print("❌ Error resultado:", e)
+            print("Error resultado:", e)
 
         return 0
