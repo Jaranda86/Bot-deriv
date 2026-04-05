@@ -5,7 +5,7 @@ import time
 
 class DerivBot:
     def __init__(self):
-        self.token = "TU_TOKEN_DERIV"  # 🔴 PONÉ TU TOKEN
+        self.token = "TU_TOKEN_DERIV"
         self.ws = None
         self.balance = 0
 
@@ -23,18 +23,29 @@ class DerivBot:
                 print("❌ Error autorización:", response)
                 return False
 
-            print("✅ Conectado a Deriv")
+            self.balance = response["authorize"]["balance"]
+            print("✅ Conectado a Deriv | Balance:", self.balance)
             return True
 
         except Exception as e:
             print("❌ Error conexión:", e)
             return False
 
-    # =========================
-    # 📊 OBTENER VELAS REALES
-    # =========================
-    def get_candles(self, symbol, count=50):
+    def get_balance(self):
+        try:
+            self.ws.send(json.dumps({"balance": 1}))
+            response = json.loads(self.ws.recv())
 
+            if "balance" in response:
+                self.balance = response["balance"]["balance"]
+                return self.balance
+
+        except:
+            pass
+
+        return self.balance
+
+    def get_candles(self, symbol, count=50):
         try:
             self.ws.send(json.dumps({
                 "ticks_history": symbol,
@@ -53,14 +64,10 @@ class DerivBot:
             return response["candles"]
 
         except Exception as e:
-            print("❌ Error obteniendo velas:", e)
+            print("❌ Error velas:", e)
             return None
 
-    # =========================
-    # 💰 COMPRAR
-    # =========================
     def comprar(self, par, tipo, monto=1):
-
         try:
             accion = "CALL" if tipo == "call" else "PUT"
 
@@ -79,14 +86,18 @@ class DerivBot:
             }))
 
             result = json.loads(self.ws.recv())
+            print("📦 Compra:", result)
 
-            print("📦 RESPUESTA COMPRA:", result)
+            time.sleep(65)  # esperar resultado real
 
-            # simulación básica resultado
-            if "buy" in result:
-                return "win" if result["buy"]["balance_after"] > self.balance else "loss"
+            nuevo_balance = self.get_balance()
 
-            return "loss"
+            if nuevo_balance > self.balance:
+                self.balance = nuevo_balance
+                return "win"
+            else:
+                self.balance = nuevo_balance
+                return "loss"
 
         except Exception as e:
             print("❌ Error compra:", e)
