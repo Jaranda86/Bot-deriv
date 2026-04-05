@@ -65,7 +65,7 @@ def ejecutar_bot():
                 print(f"🔎 Analizando {par}")
 
                 # 📊 mercado
-                score, tipo = analizar_mercado(par)
+                score, tipo = analizar_mercado(par, bot)
 
                 confianza = calcular_confianza(par, score)
                 debug_ia(par, score, confianza)
