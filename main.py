@@ -6,8 +6,8 @@ from modelo_ia import analizar_mercado, calcular_confianza, decision_final
 # =========================
 # ⚙️ CONFIG
 # =========================
-TELEGRAM_TOKEN = "TU_TOKEN"
-CHAT_ID = "TU_CHAT_ID"
+TELEGRAM_TOKEN = "8329264709:AAHyKe68ERfMr37EM8qn33KzMJuCuV6KeIM"
+CHAT_ID = "6826449033"
 
 pares = ["R_10", "R_25", "R_50", "R_75", "R_100"]
 monto_base = 10
