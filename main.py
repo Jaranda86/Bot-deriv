@@ -1,41 +1,38 @@
 import time
-import datetime
-import os
 import requests
-
 from deriv_api import DerivBot
-from modelo_ia import analizar_mercado, calcular_confianza, decision_final, debug_ia
+from modelo_ia import analizar_mercado, calcular_confianza, decision_final
 
+# =========================
+# ⚙️ CONFIG
+# =========================
+TELEGRAM_TOKEN = "TU_TOKEN"
+CHAT_ID = "TU_CHAT_ID"
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+pares = ["R_10", "R_25", "R_50", "R_75", "R_100"]
+monto_base = 10
 
-
+# =========================
+# 📲 TELEGRAM
+# =========================
 def enviar_telegram(msg):
     try:
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
     except:
-        print("Error Telegram")
+        print("❌ Error Telegram")
 
-
+# =========================
+# 🚀 BOT
+# =========================
 def ejecutar_bot():
     bot = DerivBot()
 
-    if not bot.connect():
-        print("No conecta a Deriv")
+    if not bot.conectar():
         enviar_telegram("❌ No conecta a Deriv")
         return
 
-    enviar_telegram("🚀 BOT DIOS ACTIVADO")
-
-    pares = ["R_10", "R_25", "R_50"]
-
-    monto_base = 10
-    monto = monto_base
-
-    ganadas = 0
-    perdidas = 0
+    enviar_telegram("🚀 BOT ACTIVADO REAL")
 
     while True:
         try:
@@ -43,48 +40,47 @@ def ejecutar_bot():
 
                 time.sleep(5)
 
-                print(f"Analizando {par}")
+                print(f"🔎 Analizando {par}")
 
-                velas = bot.get_candles(par)
-                print("VELAS:", velas)
-
-                if not velas:
-                    print("NO HAY VELAS")
-                    continue
-
+                # 📊 análisis IA
                 score, tipo = analizar_mercado(par, bot)
-                print("SCORE:", score, tipo)
 
-                confianza = calcular_confianza(par, score)
-                debug_ia(par, score, confianza)
-
+                confianza = calcular_confianza(score)
                 tipo = decision_final(tipo, score, confianza)
 
+                print(f"Score: {score} | Confianza: {confianza}")
+
                 if tipo is None:
-                    print("IA bloqueó")
+                    print("⛔ IA bloqueó")
                     continue
 
-                enviar_telegram(f"{par} → {tipo}")
+                # 📲 aviso
+                enviar_telegram(f"📊 {par} → {tipo.upper()} | score {score} | IA {confianza}%")
 
-                resultado = bot.comprar(par, tipo, monto)
+                # 💰 COMPRA REAL
+                contract_id = bot.comprar(par, tipo, monto_base)
 
+                if not contract_id:
+                    continue
+
+                # ⏱ esperar resultado real
                 time.sleep(65)
 
-                if resultado == "ok":
-                    ganadas += 1
-                    enviar_telegram("GANADA")
-                    monto = monto_base
+                profit = bot.check_result(contract_id)
+
+                if profit > 0:
+                    enviar_telegram(f"✅ GANADA {par} | +{profit}")
                 else:
-                    perdidas += 1
-                    enviar_telegram("PERDIDA")
-                    monto *= 2
+                    enviar_telegram(f"❌ PERDIDA {par} | {profit}")
 
         except Exception as e:
-            print("ERROR:", e)
-            enviar_telegram(f"ERROR: {e}")
-            time.sleep(10)
+            print("❌ ERROR BOT:", e)
+            enviar_telegram(f"❌ ERROR BOT: {e}")
+            time.sleep(5)
 
-
+# =========================
+# ▶️ INICIO
+# =========================
 if __name__ == "__main__":
     while True:
         ejecutar_bot()
