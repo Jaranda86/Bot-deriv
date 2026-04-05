@@ -14,10 +14,10 @@ class DerivBot:
     def conectar(self):
         try:
             print("🔌 Conectando a Deriv...")
-
+            print("Intentando conectar...")
             url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
-            self.ws = websocket.create_connection(url)
-
+            self.ws = websocket.create_connection(url, timeout=10)
+            print("Conectado websocket")
             self.ws.send(json.dumps({
                 "authorize": self.token
             }))
