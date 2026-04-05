@@ -1,6 +1,7 @@
 import websocket
 import json
 import os
+import time
 
 class DerivBot:
 
@@ -9,26 +10,29 @@ class DerivBot:
         self.token = os.getenv("DERIV_TOKEN")
 
     # =========================
-    # CONEXIÓN
+    # 🔌 CONECTAR
     # =========================
     def conectar(self):
         try:
             print("🔌 Conectando a Deriv...")
-            print("Intentando conectar...")
-            url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
-            self.ws = websocket.create_connection(url, timeout=10)
-            print("Conectado websocket")
+
+            self.ws = websocket.create_connection("wss://ws.derivws.com/websockets/v3")
+
             self.ws.send(json.dumps({
                 "authorize": self.token
             }))
 
             response = json.loads(self.ws.recv())
+            print("📡 Respuesta Deriv:", response)
 
+            # ❌ RATE LIMIT
             if "error" in response:
-                print("❌ Error:", response)
+                if "Rate limit" in str(response):
+                    print("⛔ BLOQUEADO POR DERIV - esperando 60s")
+                    time.sleep(60)
                 return False
 
-            print("✅ Conectado a Deriv")
+            print("✅ Conectado websocket")
             return True
 
         except Exception as e:
@@ -36,7 +40,7 @@ class DerivBot:
             return False
 
     # =========================
-    # OBTENER VELAS
+    # 📊 VELAS
     # =========================
     def get_candles(self, symbol):
         try:
@@ -60,9 +64,9 @@ class DerivBot:
         return []
 
     # =========================
-    # COMPRAR
+    # 💰 COMPRAR
     # =========================
-    def comprar(self, par, tipo, monto):
+    def comprar(self, par, tipo, monto=1):
         try:
             accion = "CALL" if tipo == "call" else "PUT"
 
@@ -82,8 +86,9 @@ class DerivBot:
 
             result = json.loads(self.ws.recv())
 
+            print("📥 Compra:", result)
+
             if "buy" in result:
-                print("🟢 Compra ejecutada")
                 return result["buy"]["contract_id"]
 
         except Exception as e:
@@ -92,7 +97,7 @@ class DerivBot:
         return None
 
     # =========================
-    # RESULTADO
+    # 📈 RESULTADO
     # =========================
     def check_result(self, contract_id):
         try:
@@ -105,11 +110,10 @@ class DerivBot:
                 result = json.loads(self.ws.recv())
 
                 if "proposal_open_contract" in result:
-                    contrato = result["proposal_open_contract"]
+                    contract = result["proposal_open_contract"]
 
-                    if contrato["is_sold"]:
-                        print("📊 Resultado:", contrato["profit"])
-                        return contrato["profit"]
+                    if contract["is_sold"]:
+                        return contract["profit"]
 
         except Exception as e:
             print("❌ Error resultado:", e)
