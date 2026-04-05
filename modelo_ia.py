@@ -1,5 +1,6 @@
 import json
 import os
+from indicadores import calcular_rsi, calcular_ema
 
 ARCHIVO = "historial_ia.json"
 
@@ -20,30 +21,49 @@ def guardar_historial(data):
 def analizar_mercado(par, bot):
     velas = bot.get_candles(par)
 
-    if len(velas) < 20:
+    if len(velas) < 30:
         return 0, None
 
     closes = [v["close"] for v in velas]
 
-    score = 0
+    rsi = calcular_rsi(closes)
+    ema = calcular_ema(closes)
 
-    # tendencia
-    if closes[-1] > closes[-5]:
+    score = 0
+    tipo = None
+
+    precio_actual = closes[-1]
+
+    # =========================
+    # 📈 TENDENCIA EMA
+    if precio_actual > ema:
         score += 2
         tipo = "call"
     else:
         score -= 2
         tipo = "put"
 
-    # momentum
+    # =========================
+    # 🔥 RSI
+    if rsi < 30:
+        score += 2
+        tipo = "call"
+    elif rsi > 70:
+        score += 2
+        tipo = "put"
+
+    # =========================
+    # ⚡ MOMENTUM
     if closes[-1] > closes[-2]:
         score += 1
     else:
         score -= 1
 
-    # fuerza
-    if abs(closes[-1] - closes[-2]) > 0.5:
-        score += 1
+    # =========================
+    # 🚫 FILTRO MERCADO LATERAL
+    rango = max(closes[-10:]) - min(closes[-10:])
+    if rango < 0.5:
+        return 0, None
 
     return score, tipo
 
@@ -71,7 +91,7 @@ def decision_final(tipo, score, confianza):
     if score < 3:
         return None
 
-    if confianza < 65:
+    if confianza < 70:
         return None
 
     return tipo
