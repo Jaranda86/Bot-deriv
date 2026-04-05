@@ -45,7 +45,7 @@ def ejecutar_bot():
                 # 📊 análisis IA
                 score, tipo = analizar_mercado(par, bot)
 
-                confianza = calcular_confianza(score)
+                confianza = calcular_confianza(par, score)
                 tipo = decision_final(tipo, score, confianza)
 
                 print(f"Score: {score} | Confianza: {confianza}")
