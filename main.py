@@ -1,19 +1,21 @@
-print("🔥 BOT PRO EXPERTO FINAL 🔥")
+print("🔥 VERSION PRO FINAL BOT 🔥")
 
 import time
 import os
-import datetime
 import requests
+import datetime
 
 from deriv_api import DerivBot
 from indicadores import analizar_mercado
-from modelo_ia import decision_final, registrar_resultado
+from modelo_ia import calcular_confianza
 
-# ==============================
-# 📲 TELEGRAM
-# ==============================
+
+# =========================
+# 🔹 TELEGRAM
+# =========================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+
 
 def enviar_telegram(msg):
     try:
@@ -22,9 +24,10 @@ def enviar_telegram(msg):
     except Exception as e:
         print("Error Telegram:", e)
 
-# ==============================
+
+# =========================
 # 🤖 BOT PRINCIPAL
-# ==============================
+# =========================
 def ejecutar_bot():
 
     bot = DerivBot()
@@ -34,7 +37,7 @@ def ejecutar_bot():
         time.sleep(10)
         return
 
-    enviar_telegram("🚀 BOT PRO EXPERTO ACTIVO")
+    enviar_telegram("🚀 BOT PRO FINAL ACTIVO")
 
     pares = ["R_10", "R_25", "R_50", "R_75", "R_100"]
 
@@ -43,77 +46,76 @@ def ejecutar_bot():
 
     ganadas = 0
     perdidas = 0
-    ultimo_resumen = None
+    racha_perdidas = 0
 
     while True:
         try:
             for par in pares:
 
+                # 🛑 pausa anti bloqueo API
                 time.sleep(5)
 
                 print(f"🔎 Analizando {par}...")
 
-                # 🔥 IMPORTANTE: pasar el par correctamente
                 score, tipo = analizar_mercado(par)
+                confianza = calcular_confianza(score)
 
-                # 🔥 IA EXPERTA
-                operar, confianza, estado = decision_final(score, tipo)
+                print(f"Score: {score} | IA: {confianza}%")
 
-                print(f"IA → {estado} | score: {score} | confianza: {confianza}%")
-
-                if not operar:
+                # ❌ evitar mercado basura
+                if score < 2:
                     continue
 
-                enviar_telegram(f"📊 {par} → {tipo.upper()} | Score: {score} | IA: {confianza}%")
+                # 🎯 condición optimizada (IMPORTANTE)
+                if tipo is not None and score >= 2:
 
-                print(f"💰 Ejecutando {tipo} en {par} con ${monto}")
+                    enviar_telegram(f"📊 {par} → {tipo.upper()} | Score: {score} | IA: {confianza}%")
 
-                resultado = bot.comprar(par, tipo, monto)
+                    print(f"💰 Ejecutando {tipo} en {par}")
 
-                if resultado == "win":
-                    enviar_telegram(f"✅ GANADA en {par}")
-                    registrar_resultado("win")
+                    resultado = bot.comprar(par, tipo, monto)
 
-                    ganadas += 1
-                    monto = monto_base
+                    if resultado == "win":
+                        enviar_telegram(f"✅ GANADA en {par}")
+                        ganadas += 1
+                        monto = monto_base
+                        racha_perdidas = 0
 
-                else:
-                    enviar_telegram(f"❌ PERDIDA en {par}")
-                    registrar_resultado("loss")
+                    else:
+                        enviar_telegram(f"❌ PERDIDA en {par}")
+                        perdidas += 1
+                        racha_perdidas += 1
 
-                    perdidas += 1
+                    enviar_telegram(f"💰 Balance: {bot.balance}")
 
-                enviar_telegram(f"💰 Balance: {bot.balance}")
+            # =========================
+            # 🕐 RESUMEN DIARIO 20:00 (URU)
+            # =========================
+            hora = (datetime.datetime.utcnow() - datetime.timedelta(hours=3)).hour
 
-            # ==============================
-            # 📊 RESUMEN 20:00
-            # ==============================
-            hora = datetime.datetime.now().hour
-
-            if hora == 20 and ultimo_resumen != 20:
-                enviar_telegram(f"""
-📊 RESUMEN DEL DÍA
+            if hora == 20:
+                enviar_telegram(f"""📊 RESUMEN DIARIO
 
 ✅ Ganadas: {ganadas}
 ❌ Perdidas: {perdidas}
 💰 Balance: {bot.balance}
 """)
+
                 ganadas = 0
                 perdidas = 0
-                ultimo_resumen = 20
 
-            if hora != 20:
-                ultimo_resumen = None
+                time.sleep(3600)  # evita repetir spam
 
         except Exception as e:
-            error = f"❌ ERROR BOT: {str(e)}"
-            print(error)
-            enviar_telegram(error)
+            error_msg = f"❌ ERROR BOT: {str(e)}"
+            print(error_msg)
+            enviar_telegram(error_msg)
             time.sleep(5)
 
-# ==============================
+
+# =========================
 # 🔁 LOOP GLOBAL
-# ==============================
+# =========================
 if __name__ == "__main__":
     while True:
         ejecutar_bot()
