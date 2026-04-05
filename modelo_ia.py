@@ -1,51 +1,78 @@
 import csv
 import os
+import random
 
 ARCHIVO = "historial.csv"
 
-
 # =========================
-# 📊 GUARDAR OPERACIONES
+# 📊 CREAR ARCHIVO SI NO EXISTE
 # =========================
-def guardar_operacion(par, score, resultado):
-    existe = os.path.isfile(ARCHIVO)
-
-    with open(ARCHIVO, mode="a", newline="") as f:
-        writer = csv.writer(f)
-
-        if not existe:
+def inicializar_csv():
+    if not os.path.exists(ARCHIVO):
+        with open(ARCHIVO, mode="w", newline="") as f:
+            writer = csv.writer(f)
             writer.writerow(["par", "score", "resultado"])
 
+# =========================
+# 💾 GUARDAR OPERACIÓN
+# =========================
+def guardar_operacion(par, score, resultado):
+    with open(ARCHIVO, mode="a", newline="") as f:
+        writer = csv.writer(f)
         writer.writerow([par, score, resultado])
 
-
 # =========================
-# 🧠 CALCULAR CONFIANZA INTELIGENTE
+# 🧠 IA QUE APRENDE
 # =========================
-def calcular_confianza(score):
+def calcular_confianza(par, score):
+    try:
+        datos = []
 
-    if not os.path.isfile(ARCHIVO):
-        return 50  # sin datos
+        with open(ARCHIVO, mode="r") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row["par"] == par:
+                    datos.append(row)
 
-    total = 0
-    ganadas = 0
+        # Si no hay datos → neutro
+        if len(datos) < 10:
+            return 50
 
-    with open(ARCHIVO, mode="r") as f:
-        reader = csv.DictReader(f)
+        # Filtrar datos similares
+        similares = []
+        for d in datos:
+            if abs(float(d["score"]) - score) <= 1:
+                similares.append(d)
 
-        for row in reader:
-            s = int(row["score"])
-            r = row["resultado"]
+        if len(similares) < 5:
+            return 50
 
-            # solo compara scores similares
-            if abs(s - score) <= 1:
-                total += 1
-                if r == "win":
-                    ganadas += 1
+        wins = sum(1 for d in similares if d["resultado"] == "win")
+        total = len(similares)
 
-    if total == 0:
+        confianza = int((wins / total) * 100)
+
+        return confianza
+
+    except:
         return 50
 
-    winrate = ganadas / total
+# =========================
+# 🎯 DECISIÓN FINAL IA
+# =========================
+def decision_final(tipo, score, confianza):
+    # 🔥 filtro fuerte IA
+    if confianza < 60:
+        return None
 
-    return int(winrate * 100)
+    # 🔥 score mínimo
+    if score < 3:
+        return None
+
+    return tipo
+
+# =========================
+# 🧪 DEBUG IA
+# =========================
+def debug_ia(par, score, confianza):
+    print(f"🤖 IA → {par} | score: {score} | confianza: {confianza}%")
