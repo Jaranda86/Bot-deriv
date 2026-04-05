@@ -1,102 +1,92 @@
 import json
 import os
 
-archivo = "historial.json"
+ARCHIVO = "historial_ia.json"
 
-# =========================
-# 📊 GUARDAR RESULTADO
-# =========================
-def guardar_resultado(par, score, resultado):
-    data = []
 
-    if os.path.exists(archivo):
-        with open(archivo, "r") as f:
-            data = json.load(f)
+def cargar_historial():
+    if not os.path.exists(ARCHIVO):
+        return []
+    with open(ARCHIVO, "r") as f:
+        return json.load(f)
 
-    data.append({
-        "par": par,
-        "score": score,
-        "resultado": resultado
-    })
 
-    with open(archivo, "w") as f:
+def guardar_historial(data):
+    with open(ARCHIVO, "w") as f:
         json.dump(data, f)
 
 
 # =========================
-# 🧠 APRENDIZAJE
-# =========================
-def ajustar_score(score):
-    if not os.path.exists(archivo):
-        return score
-
-    with open(archivo, "r") as f:
-        data = json.load(f)
-
-    ultimos = data[-20:]
-
-    wins = sum(1 for x in ultimos if x["resultado"] == "win")
-    losses = sum(1 for x in ultimos if x["resultado"] == "loss")
-
-    if losses > wins:
-        score -= 1
-    elif wins > losses:
-        score += 1
-
-    return score
-
-
-# =========================
-# 📊 ANALISIS (simple pero efectivo)
-# =========================
 def analizar_mercado(par, bot):
     velas = bot.get_candles(par)
 
-    if len(velas) < 10:
+    if len(velas) < 20:
         return 0, None
 
-    cierres = [float(v["close"]) for v in velas]
+    closes = [v["close"] for v in velas]
 
     score = 0
 
-    # tendencia simple
-    if cierres[-1] > cierres[-2]:
+    # tendencia
+    if closes[-1] > closes[-5]:
+        score += 2
+        tipo = "call"
+    else:
+        score -= 2
+        tipo = "put"
+
+    # momentum
+    if closes[-1] > closes[-2]:
         score += 1
     else:
         score -= 1
 
-    if cierres[-2] > cierres[-3]:
+    # fuerza
+    if abs(closes[-1] - closes[-2]) > 0.5:
         score += 1
-    else:
-        score -= 1
-
-    # impulso
-    if cierres[-1] > cierres[-5]:
-        score += 1
-
-    # IA aprendizaje
-    score = ajustar_score(score)
-
-    tipo = "call" if score > 0 else "put"
 
     return score, tipo
 
 
 # =========================
-# 📊 CONFIANZA
-# =========================
 def calcular_confianza(score):
-    return min(max(score * 25, 0), 100)
+    historial = cargar_historial()
+
+    if not historial:
+        return 60
+
+    wins = sum(1 for x in historial if x["resultado"] == "win")
+    total = len(historial)
+
+    tasa = (wins / total) * 100
+
+    confianza = int((abs(score) * 20) + (tasa * 0.6))
+
+    return min(confianza, 99)
 
 
-# =========================
-# 🎯 DECISION FINAL
 # =========================
 def decision_final(tipo, score, confianza):
-    if score < 4:
+
+    if score < 3:
         return None
 
-    if confianza < 75:
+    if confianza < 65:
         return None
 
     return tipo
+
+
+# =========================
+def guardar_resultado(par, tipo, resultado):
+    historial = cargar_historial()
+
+    historial.append({
+        "par": par,
+        "tipo": tipo,
+        "resultado": "win" if resultado > 0 else "loss"
+    })
+
+    historial = historial[-300:]
+
+    guardar_historial(historial)
