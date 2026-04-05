@@ -30,13 +30,6 @@ def enviar_telegram(msg):
     except:
         print("Error Telegram")
 
-# =========================
-# FILTRO HORARIO
-# =========================
-def horario_permitido():
-    hora = datetime.utcnow().hour
-    return 12 <= hora <= 22  # ajustar si querés
-
 
 # =========================
 # BOT
