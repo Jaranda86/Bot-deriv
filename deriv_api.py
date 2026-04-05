@@ -1,22 +1,20 @@
 import websocket
 import json
-import os
 import time
+import os
 
 class DerivBot:
     def __init__(self):
-        self.ws = None
         self.token = os.getenv("DERIV_TOKEN")
-        self.balance = 0
+        self.ws = None
 
-    def connect(self):
+    def conectar(self):
         try:
             print("🔌 Conectando a Deriv...")
-
             url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
+
             self.ws = websocket.create_connection(url)
 
-            # Autorizar
             self.ws.send(json.dumps({
                 "authorize": self.token
             }))
@@ -24,31 +22,19 @@ class DerivBot:
             response = json.loads(self.ws.recv())
 
             if "error" in response:
-                print("❌ Error autorización:", response)
+                print("❌ Error conexión:", response)
                 return False
 
             print("✅ Conectado a Deriv")
             return True
 
         except Exception as e:
-            print("❌ Error conexión:", e)
+            print("❌ Error conexión Deriv:", e)
             return False
 
-    def get_balance(self):
-        try:
-            self.ws.send(json.dumps({
-                "balance": 1
-            }))
-
-            response = json.loads(self.ws.recv())
-
-            if "balance" in response:
-                self.balance = response["balance"]["balance"]
-                return self.balance
-
-        except:
-            return None
-
+    # =========================
+    # 📊 OBTENER VELAS REALES
+    # =========================
     def get_candles(self, symbol):
         try:
             self.ws.send(json.dumps({
@@ -65,14 +51,20 @@ class DerivBot:
             if "candles" in response:
                 return response["candles"]
 
+            return []
+
         except Exception as e:
             print("❌ Error velas:", e)
+            return []
 
-        return []
-
-    def comprar(self, par, tipo, monto=1):
+    # =========================
+    # 💰 COMPRAR REAL
+    # =========================
+    def comprar(self, par, tipo, monto):
         try:
             accion = "CALL" if tipo == "call" else "PUT"
+
+            print(f"💰 EJECUTANDO {par} {accion} con monto: {monto}")
 
             self.ws.send(json.dumps({
                 "buy": 1,
@@ -89,13 +81,34 @@ class DerivBot:
             }))
 
             result = json.loads(self.ws.recv())
-
-            print("📦 COMPRA:", result)
+            print("📊 RESPUESTA COMPRA:", result)
 
             if "buy" in result:
-                return "ok"
+                return result["buy"]["contract_id"]
+
+            return None
 
         except Exception as e:
-            print("❌ Error compra:", e)
+            print("❌ Error comprar:", e)
+            return None
 
-        return "error"
+    # =========================
+    # 📈 RESULTADO REAL
+    # =========================
+    def check_result(self, contract_id):
+        try:
+            self.ws.send(json.dumps({
+                "proposal_open_contract": 1,
+                "contract_id": contract_id
+            }))
+
+            result = json.loads(self.ws.recv())
+
+            if "proposal_open_contract" in result:
+                return result["proposal_open_contract"]["profit"]
+
+            return 0
+
+        except Exception as e:
+            print("❌ Error resultado:", e)
+            return 0
