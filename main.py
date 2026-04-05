@@ -26,7 +26,7 @@ def ejecutar_bot():
 
     bot = DerivBot()
 
-    if not bot.connect():
+    if not bot.conectar():
         print("❌ Error conexión Deriv")
         enviar_telegram("❌ No conecta a Deriv")
         return
