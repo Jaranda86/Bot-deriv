@@ -8,8 +8,13 @@ class DerivBot:
         self.ws = None
         self.token = os.getenv("DERIV_TOKEN")
 
+    # =========================
+    # CONEXIÓN
+    # =========================
     def conectar(self):
         try:
+            print("🔌 Conectando a Deriv...")
+
             url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
             self.ws = websocket.create_connection(url)
 
@@ -20,16 +25,19 @@ class DerivBot:
             response = json.loads(self.ws.recv())
 
             if "error" in response:
-                print("Error:", response)
+                print("❌ Error:", response)
                 return False
 
-            print("Conectado a Deriv")
+            print("✅ Conectado a Deriv")
             return True
 
         except Exception as e:
-            print("Error conexión:", e)
+            print("❌ Error conexión:", e)
             return False
 
+    # =========================
+    # OBTENER VELAS
+    # =========================
     def get_candles(self, symbol):
         try:
             self.ws.send(json.dumps({
@@ -47,10 +55,13 @@ class DerivBot:
                 return response["candles"]
 
         except Exception as e:
-            print("Error velas:", e)
+            print("❌ Error velas:", e)
 
         return []
 
+    # =========================
+    # COMPRAR
+    # =========================
     def comprar(self, par, tipo, monto):
         try:
             accion = "CALL" if tipo == "call" else "PUT"
@@ -72,13 +83,17 @@ class DerivBot:
             result = json.loads(self.ws.recv())
 
             if "buy" in result:
+                print("🟢 Compra ejecutada")
                 return result["buy"]["contract_id"]
 
         except Exception as e:
-            print("Error compra:", e)
+            print("❌ Error compra:", e)
 
         return None
 
+    # =========================
+    # RESULTADO
+    # =========================
     def check_result(self, contract_id):
         try:
             self.ws.send(json.dumps({
@@ -93,9 +108,10 @@ class DerivBot:
                     contrato = result["proposal_open_contract"]
 
                     if contrato["is_sold"]:
+                        print("📊 Resultado:", contrato["profit"])
                         return contrato["profit"]
 
         except Exception as e:
-            print("Error resultado:", e)
+            print("❌ Error resultado:", e)
 
         return 0
