@@ -5,10 +5,6 @@ import os
 from deriv_api import DerivBot
 from modelo_ia import analizar_mercado, calcular_confianza, decision_final, guardar_resultado
 
-# =========================
-# TELEGRAM
-# =========================
-
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
@@ -19,36 +15,32 @@ def enviar_telegram(msg):
     except:
         pass
 
-# =========================
 pares = ["R_10", "R_25", "R_50", "R_75", "R_100"]
 
 MONTO_BASE = 10
 monto = MONTO_BASE
 
 perdidas = 0
-ganancias = 0
 racha = 0
-
 LIMITE = -50
 
-# =========================
-def ejecutar_bot():
 
-    global monto, perdidas, ganancias, racha
+def ejecutar_bot():
+    global monto, perdidas, racha
 
     bot = DerivBot()
 
     if not bot.conectar():
-        enviar_telegram("❌ Error conexión Deriv")
+        enviar_telegram("❌ No conecta a Deriv")
         return
 
-    enviar_telegram("🔥 BOT NIVEL EXPERTO ACTIVADO")
+    enviar_telegram("🔥 BOT ULTRA PRO ACTIVADO")
 
     while True:
         try:
 
             if perdidas <= LIMITE:
-                enviar_telegram("🛑 LIMITE PERDIDA")
+                enviar_telegram("🛑 LIMITE PERDIDA ALCANZADO")
                 time.sleep(3600)
                 continue
 
@@ -84,14 +76,15 @@ def ejecutar_bot():
 
                 if profit > 0:
                     enviar_telegram(f"✅ GANADA {par} +{profit}")
-                    ganancias += profit
                     monto = MONTO_BASE
                     racha = 0
                 else:
                     enviar_telegram(f"❌ PERDIDA {par} {profit}")
                     perdidas += profit
                     racha += 1
-                    monto *= 2
+
+                    # martingala controlada
+                    monto = min(monto * 2, 50)
 
         except Exception as e:
             enviar_telegram(f"❌ ERROR {e}")
