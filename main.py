@@ -1,4 +1,4 @@
-print("🔥 BOT PRO REAL + IA ACTIVA 🔥")
+print("🔥 BOT MODO DIOS FINAL 🔥")
 
 import time
 import os
@@ -7,8 +7,13 @@ import datetime
 
 from deriv_api import DerivBot
 from indicadores import analizar_mercado
-from modelo_ia import calcular_confianza, guardar_operacion
-
+from modelo_ia import (
+    inicializar_csv,
+    guardar_operacion,
+    calcular_confianza,
+    decision_final,
+    debug_ia
+)
 
 # =========================
 # 📲 TELEGRAM
@@ -16,114 +21,123 @@ from modelo_ia import calcular_confianza, guardar_operacion
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-
 def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
-    except Exception as e:
-        print("Error Telegram:", e)
-
+    except:
+        print("Error Telegram")
 
 # =========================
 # 🤖 BOT PRINCIPAL
 # =========================
 def ejecutar_bot():
 
+    inicializar_csv()
+
     bot = DerivBot()
 
     if not bot.connect():
-        print("❌ No conecta a Deriv")
+        enviar_telegram("❌ No conecta a Deriv")
         time.sleep(10)
         return
 
-    enviar_telegram("🚀 BOT REAL + IA APRENDIZAJE INICIADO")
+    enviar_telegram("🚀 BOT DIOS ACTIVADO")
 
-    pares = ["R_10", "R_25", "R_50"]
+    pares = ["R_10", "R_25", "R_50", "R_75", "R_100"]
 
-    monto = 10
+    monto_base = 10
+    monto = monto_base
+
     ganadas = 0
     perdidas = 0
+    racha_perdidas = 0
+
+    STOP_DIARIO = -50  # 🔒 límite pérdida diaria
+    profit_dia = 0
 
     while True:
         try:
             for par in pares:
 
-                # 🛑 evitar bloqueo API
-                time.sleep(5)
+                time.sleep(5)  # 🔥 evita bloqueos
 
                 print(f"🔎 Analizando {par}")
 
-                score, tipo = analizar_mercado(par, bot)
-                confianza = calcular_confianza(score)
+                # 📊 mercado
+                score, tipo = analizar_mercado(par)
 
-                print(f"Score: {score} | IA: {confianza}%")
+                confianza = calcular_confianza(par, score)
+                debug_ia(par, score, confianza)
 
-                # 📲 SIEMPRE reporta análisis
-                enviar_telegram(f"📊 {par} | Score: {score} | IA: {confianza}%")
+                tipo = decision_final(tipo, score, confianza)
 
-                # ❌ mercado malo
-                if score < 2:
-                    enviar_telegram(f"⛔ {par} sin señal (score bajo)")
+                if tipo is None:
+                    print("⛔ IA bloqueó operación")
                     continue
 
-                # 🤖 IA bloquea malas decisiones
-                if confianza < 55:
-                    enviar_telegram(f"🤖 IA bloquea {par} | confianza: {confianza}%")
-                    continue
+                enviar_telegram(f"📊 {par} → {tipo.upper()} | Score: {score} | IA: {confianza}%")
 
-                # 🎯 EJECUTA OPERACIÓN
-                if tipo is not None:
+                print(f"💰 Ejecutando {tipo} en {par} con ${monto}")
 
-                    enviar_telegram(f"📈 {par} → {tipo.upper()}")
+                resultado = bot.comprar(par, tipo, monto)
 
-                    print(f"💰 Ejecutando {tipo} en {par}")
+                if resultado == "win":
+                    ganadas += 1
+                    profit_dia += monto
+                    racha_perdidas = 0
 
-                    resultado = bot.comprar(par, tipo, monto)
+                    enviar_telegram(f"✅ GANADA en {par} +{monto}")
 
-                    # =========================
-                    # RESULTADO
-                    # =========================
-                    if resultado == "win":
-                        ganadas += 1
-                        guardar_operacion(par, score, "win")
-                        enviar_telegram(f"✅ GANADA en {par}")
+                    monto = monto_base
 
+                elif resultado == "loss":
+                    perdidas += 1
+                    profit_dia -= monto
+                    racha_perdidas += 1
+
+                    enviar_telegram(f"❌ PERDIDA en {par} -{monto}")
+
+                    # 🔥 martingale controlado
+                    if racha_perdidas <= 2:
+                        monto *= 2
                     else:
-                        perdidas += 1
-                        guardar_operacion(par, score, "loss")
-                        enviar_telegram(f"❌ PERDIDA en {par}")
+                        monto = monto_base
+                        racha_perdidas = 0
 
-                    # actualizar balance real
-                    balance = bot.get_balance()
+                guardar_operacion(par, score, resultado)
 
-                    enviar_telegram(f"💰 Balance actual: {balance}")
+                balance = bot.get_balance()
+                enviar_telegram(f"💰 Balance: {balance}")
 
-            # =========================
-            # 🕐 RESUMEN DIARIO
-            # =========================
-            hora = (datetime.datetime.utcnow() - datetime.timedelta(hours=3)).hour
+                # 🔒 STOP DIARIO
+                if profit_dia <= STOP_DIARIO:
+                    enviar_telegram("🛑 STOP DIARIO ACTIVADO")
+                    return
 
-            if hora == 20:
-                enviar_telegram(f"""📊 RESUMEN DIARIO
+                # 📊 RESUMEN 20:00
+                hora = datetime.datetime.now().hour
+
+                if hora == 20:
+                    enviar_telegram(f"""📊 RESUMEN DIARIO
 
 ✅ Ganadas: {ganadas}
 ❌ Perdidas: {perdidas}
-💰 Balance: {bot.balance}
+💰 Profit: {profit_dia}
+💼 Balance: {balance}
 """)
 
-                ganadas = 0
-                perdidas = 0
+                    ganadas = 0
+                    perdidas = 0
+                    profit_dia = 0
 
-                # evita spam durante esa hora
-                time.sleep(3600)
+                    time.sleep(3600)
 
         except Exception as e:
             error_msg = f"❌ ERROR BOT: {str(e)}"
             print(error_msg)
             enviar_telegram(error_msg)
             time.sleep(5)
-
 
 # =========================
 # 🔁 LOOP GLOBAL
