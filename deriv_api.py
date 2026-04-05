@@ -11,33 +11,37 @@ class DerivBot:
         self.app_id = "1089"
 
     def conectar(self):
-        try:
-            print("🔌 Conectando a Deriv...")
-            print("TOKEN:", self.token)
+    try:
+        print("🔌 Conectando a Deriv...")
 
-            if not self.token:
-                print("❌ Token no definido")
-                return False
-
-            url = f"wss://ws.derivws.com/websockets/v3?app_id={self.app_id}"
-            self.ws = websocket.create_connection(url)
-
-            self.ws.send(json.dumps({
-                "authorize": self.token
-            }))
-
-            res = json.loads(self.ws.recv())
-
-            if "error" in res:
-                print("❌ Error:", res["error"])
-                return False
-
-            print("✅ Conectado correctamente")
-            return True
-
-        except Exception as e:
-            print("❌ Error conexión:", e)
+        if not self.token:
+            print("❌ TOKEN NO DEFINIDO")
             return False
+
+        url = f"wss://ws.derivws.com/websockets/v3?app_id={self.app_id}"
+
+        self.ws = websocket.create_connection(url, timeout=10)
+
+        print("✅ WebSocket abierto")
+
+        self.ws.send(json.dumps({
+            "authorize": self.token
+        }))
+
+        res = json.loads(self.ws.recv())
+
+        print("📩 Respuesta:", res)
+
+        if "error" in res:
+            print("❌ Error autorización:", res["error"])
+            return False
+
+        print("✅ AUTORIZADO")
+        return True
+
+    except Exception as e:
+        print("❌ ERROR CONEXIÓN:", e)
+        return False
 
     # =========================
     def get_candles(self, symbol):
