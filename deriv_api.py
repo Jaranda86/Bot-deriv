@@ -13,31 +13,33 @@ class DerivBot:
     # 🔌 CONEXIÓN
     # =========================
     def connect(self):
-        try:
-            print("🔌 Conectando a Deriv...")
+    try:
+        print("🔌 Conectando a Deriv...")
 
-            url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
+        url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
 
-            self.ws = websocket.create_connection(url)
+        self.ws = websocket.WebSocket()
+        self.ws.connect(url)
 
-            self.ws.send(json.dumps({
-                "authorize": self.token
-            }))
+        # Autorizar
+        self.ws.send(json.dumps({
+            "authorize": self.token
+        }))
 
-            response = json.loads(self.ws.recv())
+        response = json.loads(self.ws.recv())
 
-            if "error" in response:
-                print("❌ Error autorización:", response)
-                return False
-
-            self.balance = response["authorize"]["balance"]
-
-            print(f"✅ Conectado | Balance: {self.balance}")
-            return True
-
-        except Exception as e:
-            print("❌ Error conexión:", e)
+        if "error" in response:
+            print("❌ Error autorización:", response)
             return False
+
+        self.balance = response["authorize"]["balance"]
+
+        print(f"✅ Conectado a Deriv | Balance: {self.balance}")
+        return True
+
+    except Exception as e:
+        print("❌ Error conexión:", e)
+        return False
 
     # =========================
     # 💰 BALANCE
