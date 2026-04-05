@@ -1,78 +1,65 @@
-import csv
-import os
 import random
 
-ARCHIVO = "historial.csv"
+# =========================
+# 📊 ANALISIS MERCADO
+# =========================
+
+def analizar_mercado(par, bot):
+    try:
+        velas = bot.get_candles(par)
+
+        if not velas or len(velas) < 10:
+            return 0, None
+
+        cierres = [v["close"] for v in velas]
+
+        # tendencia simple
+        if cierres[-1] > cierres[-2] > cierres[-3]:
+            return 3, "call"
+
+        if cierres[-1] < cierres[-2] < cierres[-3]:
+            return 3, "put"
+
+        return 1, None
+
+    except Exception as e:
+        print("Error analizar:", e)
+        return 0, None
+
 
 # =========================
-# 📊 CREAR ARCHIVO SI NO EXISTE
+# 🧠 CONFIANZA IA
 # =========================
-def inicializar_csv():
-    if not os.path.exists(ARCHIVO):
-        with open(ARCHIVO, mode="w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["par", "score", "resultado"])
 
-# =========================
-# 💾 GUARDAR OPERACIÓN
-# =========================
-def guardar_operacion(par, score, resultado):
-    with open(ARCHIVO, mode="a", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow([par, score, resultado])
-
-# =========================
-# 🧠 IA QUE APRENDE
-# =========================
 def calcular_confianza(par, score):
     try:
-        datos = []
-
-        with open(ARCHIVO, mode="r") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row["par"] == par:
-                    datos.append(row)
-
-        # Si no hay datos → neutro
-        if len(datos) < 10:
-            return 50
-
-        # Filtrar datos similares
-        similares = []
-        for d in datos:
-            if abs(float(d["score"]) - score) <= 1:
-                similares.append(d)
-
-        if len(similares) < 5:
-            return 50
-
-        wins = sum(1 for d in similares if d["resultado"] == "win")
-        total = len(similares)
-
-        confianza = int((wins / total) * 100)
-
-        return confianza
-
+        if score >= 3:
+            return random.randint(70, 100)
+        elif score == 2:
+            return random.randint(50, 70)
+        else:
+            return random.randint(0, 50)
     except:
-        return 50
+        return 0
+
 
 # =========================
-# 🎯 DECISIÓN FINAL IA
+# 🎯 DECISION FINAL
 # =========================
+
 def decision_final(tipo, score, confianza):
-    # 🔥 filtro fuerte IA
-    if confianza < 60:
+    if tipo is None:
         return None
 
-    # 🔥 score mínimo
-    if score < 3:
-        return None
+    if score >= 3 and confianza >= 60:
+        return tipo
 
-    return tipo
+    return None
+
 
 # =========================
 # 🧪 DEBUG IA
 # =========================
+
 def debug_ia(par, score, confianza):
-    print(f"🤖 IA → {par} | score: {score} | confianza: {confianza}%")
+    print(f"IA → {par} | score: {score} | confianza: {confianza}%")
