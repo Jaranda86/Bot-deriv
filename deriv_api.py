@@ -8,35 +8,31 @@ class DerivBot:
     def __init__(self):
         self.ws = None
         self.token = os.getenv("DERIV_TOKEN")
-        self.app_id = "1089"  # oficial Deriv
+        self.app_id = "1089"
 
-    # =========================
-    # 🔌 CONEXIÓN
-    # =========================
     def conectar(self):
         try:
-            print("🔌 Intentando conectar a Deriv...")
+            print("🔌 Conectando a Deriv...")
             print("TOKEN:", self.token)
 
             if not self.token:
-                print("❌ TOKEN NO DEFINIDO")
+                print("❌ Token no definido")
                 return False
 
             url = f"wss://ws.derivws.com/websockets/v3?app_id={self.app_id}"
-
             self.ws = websocket.create_connection(url)
 
             self.ws.send(json.dumps({
                 "authorize": self.token
             }))
 
-            response = json.loads(self.ws.recv())
+            res = json.loads(self.ws.recv())
 
-            if "error" in response:
-                print("❌ Error autorización:", response["error"])
+            if "error" in res:
+                print("❌ Error:", res["error"])
                 return False
 
-            print("✅ Conectado a Deriv correctamente")
+            print("✅ Conectado correctamente")
             return True
 
         except Exception as e:
@@ -44,23 +40,21 @@ class DerivBot:
             return False
 
     # =========================
-    # 📊 OBTENER VELAS REALES
-    # =========================
-    def get_candles(self, symbol, count=50):
+    def get_candles(self, symbol):
         try:
             self.ws.send(json.dumps({
                 "ticks_history": symbol,
                 "adjust_start_time": 1,
-                "count": count,
+                "count": 50,
                 "end": "latest",
                 "granularity": 60,
                 "style": "candles"
             }))
 
-            response = json.loads(self.ws.recv())
+            res = json.loads(self.ws.recv())
 
-            if "candles" in response:
-                return response["candles"]
+            if "candles" in res:
+                return res["candles"]
 
             return []
 
@@ -69,13 +63,9 @@ class DerivBot:
             return []
 
     # =========================
-    # 💰 COMPRAR OPERACIÓN
-    # =========================
     def comprar(self, par, tipo, monto):
         try:
             accion = "CALL" if tipo == "call" else "PUT"
-
-            print(f"💰 Enviando orden: {par} {accion} ${monto}")
 
             self.ws.send(json.dumps({
                 "buy": 1,
@@ -91,23 +81,18 @@ class DerivBot:
                 }
             }))
 
-            result = json.loads(self.ws.recv())
+            res = json.loads(self.ws.recv())
 
-            if "error" in result:
-                print("❌ Error compra:", result["error"])
+            if "error" in res:
+                print("❌ Error compra:", res["error"])
                 return None
 
-            contract_id = result["buy"]["contract_id"]
-            print("✅ Compra realizada ID:", contract_id)
-
-            return contract_id
+            return res["buy"]["contract_id"]
 
         except Exception as e:
             print("❌ Error comprar:", e)
             return None
 
-    # =========================
-    # 📈 RESULTADO OPERACIÓN
     # =========================
     def check_result(self, contract_id):
         try:
@@ -117,15 +102,13 @@ class DerivBot:
             }))
 
             while True:
-                response = json.loads(self.ws.recv())
+                res = json.loads(self.ws.recv())
 
-                if "proposal_open_contract" in response:
-                    contract = response["proposal_open_contract"]
+                if "proposal_open_contract" in res:
+                    contract = res["proposal_open_contract"]
 
                     if contract["is_sold"]:
-                        profit = contract["profit"]
-                        print(f"📊 Resultado contrato: {profit}")
-                        return profit
+                        return contract["profit"]
 
                 time.sleep(2)
 
