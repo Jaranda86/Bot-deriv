@@ -46,12 +46,7 @@ def ejecutar_bot():
     enviar_telegram("🔥 MODO DIOS PRO ACTIVADO")
 
     while True:
-        try:
-
-            if not horario_permitido():
-                print("⏸ fuera de horario")
-                time.sleep(60)
-                continue
+           try:
 
             if perdidas_dia <= LIMITE_PERDIDA:
                 enviar_telegram("🛑 LIMITE PERDIDA ALCANZADO")
