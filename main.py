@@ -25,7 +25,7 @@ def enviar_telegram(msg):
 # CONFIG
 # =========================
 pares = ["R_10", "R_25", "R_50"]
-MONTO = 0.35
+MONTO = 0.10
 martingala = 1
 racha_perdidas = 0
 perdidas_dia = 0
