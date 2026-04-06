@@ -16,7 +16,7 @@ class DerivBot:
         try:
             print("🔌 Conectando a Deriv...")
 
-            self.ws = websocket.create_connection("wss://ws.derivws.com/websockets/v3")
+            self.ws = websocket.create_connection("wss://ws.derivws.com/websockets/v3?app_id=1089")
 
             self.ws.send(json.dumps({
                 "authorize": self.token
