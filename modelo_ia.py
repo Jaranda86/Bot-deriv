@@ -1,156 +1,132 @@
-import time
-import os
-import requests
-from deriv_api import DerivAPI
-from modelo_ia import analizar_mercado, calcular_confianza, decision_final
+id="ia_pro_v1"
+import numpy as np
 
 # =========================
-# TELEGRAM
+# EMA
 # =========================
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+def calcular_ema(precios, periodo=14):
+    precios = np.array(precios)
 
-def enviar_telegram(msg):
-    try:
-        print("📤 Enviando a Telegram:", msg)
-        if not TOKEN or not CHAT_ID:
-            print("❌ TELEGRAM NO CONFIGURADO")
-            return
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
-    except Exception as e:
-        print("❌ Error Telegram:", e)
+    if len(precios) < periodo:
+        return precios[-1]
 
-# =========================
-# CONFIG
-# =========================
-pares = ["R_10", "R_25", "R_50"]
-MONTO = 0.35  # Usar USD o la moneda de tu cuenta
-duracion = 60  # segundos
-unidad_duracion = "s"
-martingala = 1
-racha_perdidas = 0
-perdidas_dia = 0
-LIMITE_PERDIDA = -50
+    ema = precios[0]
+    k = 2 / (periodo + 1)
+
+    for precio in precios:
+        ema = precio * k + ema * (1 - k)
+
+    return ema
+
 
 # =========================
-# CONEXIÓN DERIV
+# RSI
 # =========================
-app_id = "1234"  # ⚠️ CAMBIA ESTO POR TU APP ID REAL (lo sacas en deriv.com)
-api_token = os.getenv("DERIV_TOKEN")
+def calcular_rsi(precios, periodo=14):
+    precios = np.array(precios)
 
-async def conectar_deriv():
-    api = DerivAPI(app_id=app_id)
-    await api.authorize(api_token)
-    return api
+    if len(precios) < periodo + 1:
+        return 50
 
-# =========================
-# FUNCIONES AUXILIARES
-# =========================
-async def get_velas(api, symbol, count=20, interval=60):
-    response = await api.ticks_history({
-        "ticks_history": symbol,
-        "adjust_start_time": 1,
-        "count": count,
-        "end": "latest",
-        "granularity": interval,
-        "style": "candles"
-    })
-    return response['candles']
+    deltas = np.diff(precios)
 
-async def comprar_operacion(api, symbol, tipo, monto):
-    contrato = {
-        "buy": 1,
-        "parameters": {
-            "amount": monto,
-            "basis": "stake",
-            "contract_type": tipo,
-            "currency": "USD",
-            "duration": duracion,
-            "duration_unit": unidad_duracion,
-            "symbol": symbol
-        }
-    }
-    res = await api.buy(contrato)
-    return res.get('buy', {}).get('contract_id', None)
+    ganancias = np.where(deltas > 0, deltas, 0)
+    perdidas = np.where(deltas < 0, -deltas, 0)
 
-async def check_resultado(api, contract_id):
-    res = await api.proposal_open_contract({"contract_id": contract_id})
-    profit = res['proposal_open_contract']['profit']
-    return float(profit)
+    avg_gain = np.mean(ganancias[-periodo:])
+    avg_loss = np.mean(perdidas[-periodo:])
+
+    if avg_loss == 0:
+        return 100
+
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+
+    return rsi
+
 
 # =========================
-# BOT PRINCIPAL
+# ANÁLISIS DE MERCADO
 # =========================
-async def ejecutar_bot():
-    global martingala, racha_perdidas, perdidas_dia
+def analizar_mercado(par, velas):
 
-    print("🔥 ARRANCANDO BOT...")
-    enviar_telegram("🔥 BOT INICIADO")
+    closes = [float(v["close"]) for v in velas]
 
-    api = await conectar_deriv()
+    if len(closes) < 20:
+        return 0, None
 
-    while True:
-        try:
-            print("🔄 LOOP ACTIVO")
+    # Indicadores
+    ema_rapida = calcular_ema(closes, 9)
+    ema_lenta = calcular_ema(closes, 21)
+    rsi = calcular_rsi(closes, 14)
 
-            for par in pares:
-                print(f"📊 Analizando {par}")
-                time.sleep(2)
+    precio_actual = closes[-1]
 
-                velas = await get_velas(api, par, count=30, interval=60)
-                
-                if len(velas) < 20:
-                    print("❌ Pocos datos, salteando...")
-                    continue
+    score = 0
+    tipo = None
 
-                score, tipo = analizar_mercado(par, velas)
-                confianza = calcular_confianza(score)
-                tipo = decision_final(tipo, score, confianza)
+    # =========================
+    # LÓGICA EMA
+    # =========================
+    if ema_rapida > ema_lenta and precio_actual > ema_rapida:
+        score += 1
+        tipo = "call"
 
-                print(f"{par} → {tipo} | IA {confianza}%")
+    elif ema_rapida < ema_lenta and precio_actual < ema_rapida:
+        score += 1
+        tipo = "put"
 
-                if tipo is None:
-                    continue
+    # =========================
+    # LÓGICA RSI
+    # =========================
+    if rsi < 30:
+        score += 1
+        tipo = "call"
 
-                enviar_telegram(f"📊 {par} → {tipo.upper()} | IA {confianza}%")
+    elif rsi > 70:
+        score += 1
+        tipo = "put"
 
-                monto_actual = MONTO * martingala
-                contract_id = await comprar_operacion(api, par, tipo, monto_actual)
+    # =========================
+    # CONFIRMACIÓN FUERZA
+    # =========================
+    tendencia = closes[-1] - closes[-5]
 
-                if not contract_id:
-                    print("❌ No se pudo ejecutar la operación")
-                    continue
+    if tendencia > 0:
+        score += 1
+        tipo = "call"
+    elif tendencia < 0:
+        score += 1
+        tipo = "put"
 
-                print("⏳ Esperando resultado...")
-                time.sleep(duracion + 5)
+    return score, tipo
 
-                profit = await check_resultado(api, contract_id)
-
-                if profit > 0:
-                    enviar_telegram(f"✅ GANADA {par} | +{profit}")
-                    martingala = 1
-                    racha_perdidas = 0
-                else:
-                    enviar_telegram(f"❌ PERDIDA {par} | {profit}")
-                    martingala *= 2
-                    racha_perdidas += 1
-                    perdidas_dia += profit
-
-                # Control de pérdidas
-                if perdidas_dia <= LIMITE_PERDIDA:
-                    enviar_telegram("🛑 LÍMITE DE PÉRDIDA ALCANZADO. BOT DETENIDO.")
-                    print("🛑 Bot detenido por límite de pérdida")
-                    return
-
-        except Exception as e:
-            print("❌ ERROR GENERAL:", e)
-            enviar_telegram(f"❌ ERROR BOT: {e}")
-            time.sleep(10)
 
 # =========================
-# INICIO
+# CONFIANZA IA
 # =========================
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(ejecutar_bot())
+def calcular_confianza(score):
+
+    if score == 3:
+        return 90
+    elif score == 2:
+        return 75
+    elif score == 1:
+        return 60
+    else:
+        return 0
+
+
+# =========================
+# DECISIÓN FINAL
+# =========================
+def decision_final(tipo, score, confianza):
+
+    # 🔥 filtro PRO (evita malas entradas)
+    if score < 2:
+        return None
+
+    if confianza < 70:
+        return None
+
+    return tipo
