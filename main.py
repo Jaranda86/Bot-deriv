@@ -48,11 +48,6 @@ def ejecutar_bot():
 
     bot = DerivBot()
 
-    if not bot.conectar():
-        print("❌ No conecta a Deriv")
-        time.sleep(60)
-        return
-
     print("✅ Conectado a Deriv")
 
     while True:
