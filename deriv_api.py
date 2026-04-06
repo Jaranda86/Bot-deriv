@@ -1,6 +1,7 @@
 import websocket
 import json
 import os
+import time
 
 
 class DerivBot:
@@ -9,10 +10,12 @@ class DerivBot:
         self.token = os.getenv("DERIV_TOKEN")
 
     # =========================
-    # CREAR NUEVA CONEXIÓN
+    # NUEVA CONEXIÓN SEGURA
     # =========================
     def nueva_conexion(self):
         try:
+            time.sleep(1.5)  # 🔥 evita bloqueo (rate limit)
+
             ws = websocket.create_connection(
                 "wss://ws.derivws.com/websockets/v3?app_id=1089"
             )
@@ -25,6 +28,7 @@ class DerivBot:
 
             if "error" in response:
                 print("❌ Error autorización:", response)
+                ws.close()
                 return None
 
             return ws
@@ -34,7 +38,7 @@ class DerivBot:
             return None
 
     # =========================
-    # VELAS
+    # OBTENER VELAS
     # =========================
     def get_candles(self, symbol):
         ws = self.nueva_conexion()
