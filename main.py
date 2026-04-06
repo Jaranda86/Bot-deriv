@@ -1,6 +1,6 @@
 import time
-import requests
 import os
+import requests
 
 from deriv_api import DerivBot
 from modelo_ia import analizar_mercado, calcular_confianza, decision_final
@@ -8,77 +8,86 @@ from modelo_ia import analizar_mercado, calcular_confianza, decision_final
 # =========================
 # TELEGRAM
 # =========================
+
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+CHAT_ID = os.getenv("CHAT_ID")
+
 
 def enviar_telegram(msg):
     try:
-        if not TOKEN or not CHAT_ID:
-            print("❌ TELEGRAM NO CONFIGURADO")
-            return
-
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
         requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
-    except Exception as e:
-        print("Error Telegram:", e)
+    except:
+        print("Error Telegram")
 
 
 # =========================
 # CONFIG
 # =========================
-pares = ["R_10", "R_25", "R_50"]
 
-monto_base = 1
-monto = monto_base
+pares = ["R_10", "R_25", "R_50", "R_75", "R_100"]
 
-perdidas_dia = 0
+MONTO = 1
+martingala = 1
 racha_perdidas = 0
-
+perdidas_dia = 0
 LIMITE_PERDIDA = -50
 
 
 # =========================
-# BOT
+# BOT PRINCIPAL
 # =========================
-def ejecutar_bot():
-    global monto, perdidas_dia, racha_perdidas
 
-    print("🔥 ARRANCÓ EL BOT")
-    enviar_telegram("🔥 BOT DIOS ACTIVO")
+def ejecutar_bot():
 
     bot = DerivBot()
 
-    print("✅ Conectado a Deriv")
+    enviar_telegram("🔥 BOT DIOS PRO ACTIVO")
+
+    time.sleep(3)  # 🔥 evita rate limit inicial
 
     while True:
         try:
 
+            # 🔴 límite diario
+            if perdidas_dia <= LIMITE_PERDIDA:
+                enviar_telegram("🛑 LIMITE DE PERDIDA ALCANZADO")
+                time.sleep(3600)
+                continue
+
+            # 🔴 pausa por racha
+            if racha_perdidas >= 3:
+                enviar_telegram("⚠️ Pausa por racha negativa")
+                time.sleep(600)
+                racha_perdidas = 0
+                continue
+
             for par in pares:
-                print(f"🔍 Analizando {par}")
-                time.sleep(5)
 
-                # 🔥 DEBUG REAL
-                candles = bot.get_candles(par)
-                print("VELAS:", len(candles))
+                time.sleep(3)  # 🔥 CLAVE anti bloqueo
 
-                if not candles:
+                velas = bot.get_candles(par)
+
+                print(f"VELAS: {len(velas)}")
+
+                if len(velas) < 20:
                     print("❌ Sin velas")
                     continue
 
-                score, tipo = analizar_mercado(par, bot)
+                score, tipo = analizar_mercado(par, velas)
                 confianza = calcular_confianza(score)
                 tipo = decision_final(tipo, score, confianza)
 
+                print(f"{par} score {score} | IA {confianza}%")
+
                 if tipo is None:
-                    print("❌ IA bloqueó")
                     continue
 
-                enviar_telegram(f"{par} → {tipo} | IA {confianza}%")
+                enviar_telegram(f"📊 {par} → {tipo.upper()} | IA {confianza}%")
 
-                contract_id = bot.comprar(par, tipo, monto)
+                contract_id = bot.comprar(par, tipo, MONTO * martingala)
 
                 if not contract_id:
-                    print("❌ No compra")
                     continue
 
                 time.sleep(65)
@@ -86,26 +95,24 @@ def ejecutar_bot():
                 profit = bot.check_result(contract_id)
 
                 if profit > 0:
-                    print("✅ GANADA", profit)
-                    enviar_telegram(f"✅ GANADA {par} +{profit}")
-                    monto = monto_base
+                    enviar_telegram(f"✅ GANADA {par} | +{profit}")
+                    martingala = 1
                     racha_perdidas = 0
-
                 else:
-                    print("❌ PERDIDA", profit)
-                    enviar_telegram(f"❌ PERDIDA {par} {profit}")
-                    perdidas_dia += profit
+                    enviar_telegram(f"❌ PERDIDA {par} | {profit}")
+                    martingala *= 2
                     racha_perdidas += 1
-                    monto *= 2
+                    perdidas_dia += profit
 
         except Exception as e:
-            print("❌ ERROR:", e)
-            enviar_telegram(f"❌ ERROR {e}")
+            print("ERROR:", e)
+            enviar_telegram(f"❌ ERROR BOT: {e}")
             time.sleep(10)
 
 
 # =========================
-# START
+# INICIO
 # =========================
+
 if __name__ == "__main__":
     ejecutar_bot()
