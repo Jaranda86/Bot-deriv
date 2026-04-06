@@ -4,4 +4,4 @@ flask
 scikit-learn
 joblib
 websocket-client
-deriv-api
+deriv
