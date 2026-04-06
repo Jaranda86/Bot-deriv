@@ -8,45 +8,53 @@ class DerivBot:
 
     def __init__(self):
         self.token = os.getenv("DERIV_TOKEN")
+        self.ws = None
 
     # =========================
-    # NUEVA CONEXIÓN SEGURA
+    # CONECTAR UNA VEZ
     # =========================
-    def nueva_conexion(self):
+    def conectar(self):
         try:
-            time.sleep(1.5)  # 🔥 evita bloqueo (rate limit)
+            time.sleep(1)
 
-            ws = websocket.create_connection(
+            self.ws = websocket.create_connection(
                 "wss://ws.derivws.com/websockets/v3?app_id=1089"
             )
 
-            ws.send(json.dumps({
+            self.ws.send(json.dumps({
                 "authorize": self.token
             }))
 
-            response = json.loads(ws.recv())
+            response = json.loads(self.ws.recv())
 
             if "error" in response:
                 print("❌ Error autorización:", response)
-                ws.close()
-                return None
+                self.ws = None
+                return False
 
-            return ws
+            print("✅ Conectado a Deriv")
+            return True
 
         except Exception as e:
             print("❌ Error conexión:", e)
-            return None
+            return False
 
     # =========================
-    # OBTENER VELAS
+    # DESCONECTAR
+    # =========================
+    def cerrar(self):
+        try:
+            if self.ws:
+                self.ws.close()
+        except:
+            pass
+
+    # =========================
+    # VELAS
     # =========================
     def get_candles(self, symbol):
-        ws = self.nueva_conexion()
-        if not ws:
-            return []
-
         try:
-            ws.send(json.dumps({
+            self.ws.send(json.dumps({
                 "ticks_history": symbol,
                 "adjust_start_time": 1,
                 "count": 50,
@@ -55,8 +63,7 @@ class DerivBot:
                 "style": "candles"
             }))
 
-            response = json.loads(ws.recv())
-            ws.close()
+            response = json.loads(self.ws.recv())
 
             if "candles" in response:
                 return response["candles"]
@@ -70,14 +77,10 @@ class DerivBot:
     # COMPRAR
     # =========================
     def comprar(self, par, tipo, monto=1):
-        ws = self.nueva_conexion()
-        if not ws:
-            return None
-
         try:
             accion = "CALL" if tipo == "call" else "PUT"
 
-            ws.send(json.dumps({
+            self.ws.send(json.dumps({
                 "buy": 1,
                 "price": monto,
                 "parameters": {
@@ -91,8 +94,7 @@ class DerivBot:
                 }
             }))
 
-            result = json.loads(ws.recv())
-            ws.close()
+            result = json.loads(self.ws.recv())
 
             if "buy" in result:
                 return result["buy"]["contract_id"]
@@ -106,24 +108,19 @@ class DerivBot:
     # RESULTADO
     # =========================
     def check_result(self, contract_id):
-        ws = self.nueva_conexion()
-        if not ws:
-            return 0
-
         try:
-            ws.send(json.dumps({
+            self.ws.send(json.dumps({
                 "proposal_open_contract": 1,
                 "contract_id": contract_id
             }))
 
             while True:
-                result = json.loads(ws.recv())
+                result = json.loads(self.ws.recv())
 
                 if "proposal_open_contract" in result:
                     contract = result["proposal_open_contract"]
 
                     if contract["is_sold"]:
-                        ws.close()
                         return contract["profit"]
 
         except Exception as e:
