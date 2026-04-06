@@ -82,7 +82,19 @@ def ejecutar_bot():
 
                 print(f"🔍 Analizando {par}")
 
-                score, tipo = analizar_mercado(par, bot)
+              try:
+                  candles = bot.get_candles(par)
+                  print(f"VELAS {par}:", len(candles))
+
+                if not candles:
+                     print("❌ No hay velas")
+                     continue
+
+                 score, tipo = analizar_mercado(par, bot)
+
+                  except Exception as e:
+                      print("❌ ERROR ANALISIS:", e)
+                      continue
                 confianza = calcular_confianza(score)
                 tipo = decision_final(tipo, score, confianza)
 
