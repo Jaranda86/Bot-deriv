@@ -1,11 +1,12 @@
 import time
 import os
 import requests
+import asyncio
 from deriv_api import DerivAPI
-from modelo_ia import analizar_mercado, calcular_confianza, decision_final
+from ia_pro_v1 import analizar_mercado, calcular_confianza, decision_final
 
 # =========================
-# TELEGRAM
+# CONFIGURACIÓN TELEGRAM
 # =========================
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -22,135 +23,144 @@ def enviar_telegram(msg):
         print("❌ Error Telegram:", e)
 
 # =========================
-# CONFIG
+# PARÁMETROS DE TRADING
 # =========================
 pares = ["R_10", "R_25", "R_50"]
-MONTO = 0.35  # Usar USD o la moneda de tu cuenta
-duracion = 60  # segundos
-unidad_duracion = "s"
+MONTO = 0.35       # Monto base
+DURACION = 60      # Segundos por operación
+LIMITE_PERDIDA = -50
+
+# Variables de control
 martingala = 1
 racha_perdidas = 0
 perdidas_dia = 0
-LIMITE_PERDIDA = -50
 
 # =========================
-# CONEXIÓN DERIV
+# CONEXIÓN DERIV API
 # =========================
-app_id = "1234"  # ⚠️ CAMBIA ESTO POR TU APP ID REAL (lo sacas en deriv.com)
-api_token = os.getenv("DERIV_TOKEN")
+APP_ID = "1234"  # ⚠️ CAMBIA ESTE NÚMERO POR TU APP ID REAL
+API_TOKEN = os.getenv("DERIV_TOKEN")
 
-async def conectar_deriv():
-    api = DerivAPI(app_id=app_id)
-    await api.authorize(api_token)
+async def conectar():
+    api = DerivAPI(app_id=APP_ID)
+    await api.authorize(API_TOKEN)
+    print("✅ Conectado a Deriv")
     return api
 
 # =========================
 # FUNCIONES AUXILIARES
 # =========================
-async def get_velas(api, symbol, count=20, interval=60):
-    response = await api.ticks_history({
-        "ticks_history": symbol,
-        "adjust_start_time": 1,
-        "count": count,
+async def get_velas(api, simbolo, cantidad=30):
+    """Obtiene historial de velas"""
+    respuesta = await api.ticks_history({
+        "ticks_history": simbolo,
+        "count": cantidad,
         "end": "latest",
-        "granularity": interval,
+        "granularity": DURACION,
         "style": "candles"
     })
-    return response['candles']
+    return respuesta['candles']
 
-async def comprar_operacion(api, symbol, tipo, monto):
-    contrato = {
+async def ejecutar_operacion(api, simbolo, tipo, monto):
+    """Ejecuta compra o venta"""
+    parametros = {
         "buy": 1,
         "parameters": {
             "amount": monto,
             "basis": "stake",
             "contract_type": tipo,
             "currency": "USD",
-            "duration": duracion,
-            "duration_unit": unidad_duracion,
-            "symbol": symbol
+            "duration": DURACION,
+            "duration_unit": "s",
+            "symbol": simbolo
         }
     }
-    res = await api.buy(contrato)
-    return res.get('buy', {}).get('contract_id', None)
+    resultado = await api.buy(parametros)
+    return resultado.get('buy', {}).get('contract_id')
 
-async def check_resultado(api, contract_id):
-    res = await api.proposal_open_contract({"contract_id": contract_id})
-    profit = res['proposal_open_contract']['profit']
-    return float(profit)
+async def ver_resultado(api, contract_id):
+    """Espera y verifica ganancia/perdida"""
+    await asyncio.sleep(DURACION + 2)  # Esperar a que cierre
+    datos = await api.proposal_open_contract({"contract_id": contract_id})
+    return float(datos['proposal_open_contract']['profit'])
 
 # =========================
-# BOT PRINCIPAL
+# BUCLE PRINCIPAL
 # =========================
 async def ejecutar_bot():
     global martingala, racha_perdidas, perdidas_dia
 
-    print("🔥 ARRANCANDO BOT...")
-    enviar_telegram("🔥 BOT INICIADO")
+    print("🔥 INICIANDO IA PRO V1...")
+    enviar_telegram("🤖 BOT IA PRO V1 - ACTIVADO")
 
-    api = await conectar_deriv()
+    api = await conectar()
 
     while True:
         try:
-            print("🔄 LOOP ACTIVO")
-
             for par in pares:
-                print(f"📊 Analizando {par}")
-                time.sleep(2)
+                print(f"\n📊 Analizando {par}...")
 
-                velas = await get_velas(api, par, count=30, interval=60)
+                # 1. Obtener datos
+                velas = await get_velas(api, par, cantidad=30)
                 
                 if len(velas) < 20:
-                    print("❌ Pocos datos, salteando...")
+                    print("⚠️ Pocos datos, saltando...")
                     continue
 
-                score, tipo = analizar_mercado(par, velas)
+                # 2. ANÁLISIS DE TU IA
+                score, tipo_señal = analizar_mercado(par, velas)
                 confianza = calcular_confianza(score)
-                tipo = decision_final(tipo, score, confianza)
+                decision = decision_final(tipo_señal, score, confianza)
 
-                print(f"{par} → {tipo} | IA {confianza}%")
+                print(f"📈 Score: {score} | Confianza: {confianza}% | Señal: {decision}")
 
-                if tipo is None:
+                # 3. ¿Entrar o no entrar?
+                if not decision:
+                    print("⏭️  Sin señal confiable, pasamos.")
                     continue
 
-                enviar_telegram(f"📊 {par} → {tipo.upper()} | IA {confianza}%")
+                # 4. EJECUTAR
+                monto_real = MONTO * martingala
+                enviar_telegram(f"🚀 {par} | {decision.upper()} | Confianza: {confianza}% | Monto: {monto_real}")
 
-                monto_actual = MONTO * martingala
-                contract_id = await comprar_operacion(api, par, tipo, monto_actual)
+                contract_id = await ejecutar_operacion(api, par, decision, monto_real)
 
                 if not contract_id:
-                    print("❌ No se pudo ejecutar la operación")
+                    print("❌ Falló la ejecución")
                     continue
 
-                print("⏳ Esperando resultado...")
-                time.sleep(duracion + 5)
+                # 5. ESPERAR RESULTADO
+                profit = await ver_resultado(api, contract_id)
 
-                profit = await check_resultado(api, contract_id)
-
+                # 6. GESTIÓN DE CAPITAL
                 if profit > 0:
-                    enviar_telegram(f"✅ GANADA {par} | +{profit}")
+                    enviar_telegram(f"✅ GANADA | +{profit} USD")
                     martingala = 1
                     racha_perdidas = 0
                 else:
-                    enviar_telegram(f"❌ PERDIDA {par} | {profit}")
+                    enviar_telegram(f"❌ PERDIDA | {profit} USD")
                     martingala *= 2
                     racha_perdidas += 1
                     perdidas_dia += profit
 
-                # Control de pérdidas
+                # 7. CONTROL DE RIESGO
                 if perdidas_dia <= LIMITE_PERDIDA:
                     enviar_telegram("🛑 LÍMITE DE PÉRDIDA ALCANZADO. BOT DETENIDO.")
-                    print("🛑 Bot detenido por límite de pérdida")
+                    print("🛑 Stop total por pérdidas máximas.")
                     return
 
+                await asyncio.sleep(3)  # Pausa corta entre pares
+
         except Exception as e:
-            print("❌ ERROR GENERAL:", e)
-            enviar_telegram(f"❌ ERROR BOT: {e}")
-            time.sleep(10)
+            print("❌ ERROR CRÍTICO:", e)
+            enviar_telegram(f"⚠️ ERROR EN EL SISTEMA: {e}")
+            await asyncio.sleep(10)
 
 # =========================
-# INICIO
+# ARRANCAR
 # =========================
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(ejecutar_bot())
+    try:
+        asyncio.run(ejecutar_bot())
+    except KeyboardInterrupt:
+        print("👋 Bot detenido por el usuario")
