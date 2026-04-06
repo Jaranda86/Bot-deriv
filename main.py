@@ -95,7 +95,11 @@ async def ejecutar_bot():
     print("🔥 INICIANDO SISTEMA IA PRO V1...")
     enviar_telegram("🤖 BOT IA PRO V1 - SISTEMA ACTIVO")
 
-    api = await conectar()
+    bot = DerivBot()
+if not bot.conectar():
+    print("❌ No conectó")
+    continue
+    
 
     while True:
         try:
