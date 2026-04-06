@@ -39,7 +39,7 @@ perdidas_dia = 0
 # CONEXIÓN DERIV API
 # =========================
 # ⚠️ CAMBIA ESTE NÚMERO POR TU APP ID REAL
-APP_ID = "1234"
+APP_ID = "80108879"
 API_TOKEN = os.getenv("DERIV_TOKEN")
 
 async def conectar():
