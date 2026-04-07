@@ -25,7 +25,7 @@ def enviar_telegram(msg):
 # PARÁMETROS DE TRADING
 # =========================
 pares = ["R_10", "R_25", "R_50"]
-MONTO = 0.10          # Monto base
+MONTO = 0.10           # Bajado para seguridad
 LIMITE_PERDIDA = -50   # Límite de pérdida diaria
 
 # Variables de control
@@ -52,8 +52,9 @@ def ejecutar_bot():
                 # 1. CONECTAR A DERIV
                 bot = DerivBot()
                 if not bot.conectar():
-                    print("❌ No se pudo conectar a Deriv")
-                    time.sleep(5)
+                    print("❌ No se pudo conectar a Deriv (posible límite alcanzado)")
+                    print("⏳ Esperando 60 segundos antes de intentar de nuevo...")
+                    time.sleep(60)  # Esperamos mucho si falla
                     continue
 
                 # 2. OBTENER DATOS
@@ -63,6 +64,7 @@ def ejecutar_bot():
                 if len(velas) < 20:
                     print("⚠️ Pocos datos, saltando...")
                     bot.cerrar()
+                    time.sleep(5)
                     continue
 
                 # 3. ANÁLISIS CON IA Y MEMORIA
@@ -76,7 +78,7 @@ def ejecutar_bot():
                 if not decision:
                     print("⏭️  No hay señal confiable, pasamos...")
                     bot.cerrar()
-                    time.sleep(2)
+                    time.sleep(3)  # Pausa corta entre pares
                     continue
 
                 # 5. EJECUTAR OPERACIÓN
@@ -88,6 +90,7 @@ def ejecutar_bot():
                 if not contract_id:
                     print("❌ Falló la ejecución de la compra")
                     bot.cerrar()
+                    time.sleep(10)
                     continue
 
                 # 6. ESPERAR Y VER RESULTADO
@@ -127,12 +130,20 @@ def ejecutar_bot():
                     print("🛑 Bot detenido.")
                     return
 
-                time.sleep(3)  # Pausa entre operaciones
+                time.sleep(5)  # Pausa entre operaciones
+
+            # ==================================
+            # ⏳ PAUSA GRANDE ENTRE CICLOS COMPLETOS
+            # MUY IMPORTANTE PARA NO BLOQUEAR LA API
+            # ==================================
+            print("\n⏳ Ciclo terminado. Esperando 30 segundos antes del próximo análisis...")
+            time.sleep(30)
 
         except Exception as e:
             print("❌ ERROR EN EL SISTEMA:", e)
             enviar_telegram(f"⚠️ ERROR CRÍTICO: {e}")
-            time.sleep(10)
+            print("⏳ Esperando 60 segundos por seguridad...")
+            time.sleep(60)  # Si hay error grave, esperamos 1 minuto
 
 # =========================
 # INICIAR BOT
