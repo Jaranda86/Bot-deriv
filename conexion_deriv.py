@@ -1,27 +1,25 @@
-import websocket
-import json
+import asyncio
 import os
-import time
+from deriv_api import DerivAPI
 
 class DerivBot:
 
     def __init__(self):
         self.token = os.getenv("DERIV_TOKEN")
-        self.ws = None
+        self.app_id = 1089
+        self.api = None
 
-    def conectar(self):
+    async def conectar(self):
         try:
-            time.sleep(0.5)
-            self.ws = websocket.create_connection(
-                "wss://ws.derivws.com/websockets/v3?app_id=1089",
-                timeout=30
-            )
-            self.ws.send(json.dumps({"authorize": self.token}))
-            response = json.loads(self.ws.recv())
-            if "error" in response:
-                print("❌ ERROR AUTORIZACIÓN:", response['error']['message'])
+            self.api = DerivAPI()
+            await self.api.connect({"app_id": self.app_id})
+            auth = await self.api.authorize({"token": self.token})
+            
+            if "error" in auth:
+                print("❌ ERROR AUTORIZACIÓN:", auth['error']['message'])
                 return False
-            print("✅ Conectado y Autorizado OK")
+                
+            print("✅ Conectado y Autorizado OK (Librería Oficial)")
             return True
         except Exception as e:
             print("❌ ERROR CONEXIÓN:", str(e))
@@ -29,37 +27,36 @@ class DerivBot:
 
     def cerrar(self):
         try:
-            if self.ws:
-                self.ws.close()
+            if self.api:
+                asyncio.create_task(self.api.disconnect())
         except:
             pass
 
-    def get_candles(self, symbol):
+    async def get_candles(self, symbol):
         try:
-            self.ws.send(json.dumps({
+            response = await self.api.ticks_history({
                 "ticks_history": symbol,
                 "adjust_start_time": 1,
                 "count": 50,
                 "end": "latest",
                 "granularity": 60,
                 "style": "candles"
-            }))
-            response = json.loads(self.ws.recv())
+            })
             return response.get("candles", [])
         except Exception as e:
             print("❌ ERROR VELAS:", str(e))
             return []
 
     # ==================================
-    # ✅ MÉTODO NUEVO: PROPOSAL + BUY
+    # ✅ COMPRAR USANDO LA LIBRERÍA
     # ==================================
-    def comprar(self, par, tipo, monto=1):
+    async def comprar(self, par, tipo, monto=1):
         try:
             accion = "CALL" if tipo.lower() == "call" else "PUT"
             print(f"📤 ENVIANDO ORDEN: {par} | {accion} | ${monto}")
 
-            # PASO 1: PEDIR PROPUESTA (COTIZACIÓN)
-            propuesta = {
+            # PASO 1: PROPUESTA
+            prop = await self.api.proposal({
                 "proposal": 1,
                 "amount": monto,
                 "basis": "stake",
@@ -68,65 +65,57 @@ class DerivBot:
                 "duration": 1,
                 "duration_unit": "m",
                 "symbol": par
-            }
+            })
 
-            self.ws.send(json.dumps(propuesta))
-            res_prop = json.loads(self.ws.recv())
-
-            if "error" in res_prop:
-                print(f"💥 ERROR PROPUESTA: {res_prop['error']['message']}")
+            if "error" in prop:
+                print(f"💥 ERROR PROPUESTA: {prop['error']['message']}")
                 return None
 
-            if "proposal" not in res_prop:
-                print("⚠️ No llegó proposal")
+            if "proposal" not in prop:
+                print("⚠️ No hay proposal")
                 return None
 
-            proposal_id = res_prop["proposal"].get("id")
-            if not proposal_id:
-                print("⚠️ No vino ID")
-                return None
-
-            # PASO 2: COMPRAR USANDO EL ID
-            orden = {
+            proposal_id = prop["proposal"].get("id")
+            
+            # PASO 2: COMPRA
+            orden = await self.api.buy({
                 "buy": proposal_id,
                 "price": monto
-            }
+            })
 
-            self.ws.send(json.dumps(orden))
-            result = json.loads(self.ws.recv())
+            print(f"📥 RESPUESTA COMPRA: {orden}")
 
-            print(f"📥 RESPUESTA FINAL: {json.dumps(result, indent=2)}")
-
-            if "error" in result:
-                print(f"💥 ERROR COMPRA: {result['error']['message']}")
+            if "error" in orden:
+                print(f"💥 ERROR COMPRA: {orden['error']['message']}")
                 return None
 
-            if "buy" in result and "contract_id" in result["buy"]:
-                contract_id = result["buy"]["contract_id"]
+            if "buy" in orden and "contract_id" in orden["buy"]:
+                contract_id = orden["buy"]["contract_id"]
                 print(f"✅ ORDEN EXITOSA! ID: {contract_id}")
                 return contract_id
             else:
-                print("⚠️ Respuesta sin contract_id")
+                print("⚠️ Sin contract_id")
                 return None
 
         except Exception as e:
             print(f"💥 ERROR EN FUNCIÓN COMPRAR: {str(e)}")
             return None
 
-    def check_result(self, contract_id):
+    async def check_result(self, contract_id):
         try:
-            self.ws.send(json.dumps({
-                "proposal_open_contract": 1,
-                "contract_id": contract_id
-            }))
             while True:
-                result = json.loads(self.ws.recv())
+                result = await self.api.proposal_open_contract({
+                    "proposal_open_contract": 1,
+                    "contract_id": contract_id
+                })
+
                 if "proposal_open_contract" in result:
                     contract = result["proposal_open_contract"]
                     if contract.get("is_sold", False):
                         profit = float(contract.get("profit", 0))
                         print(f"🏁 RESULTADO: Profit = {profit}")
                         return profit
+                await asyncio.sleep(1)
         except Exception as e:
             print("❌ ERROR ESPERANDO RESULTADO:", str(e))
             return 0
