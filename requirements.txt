@@ -1,7 +1,4 @@
-numpy
-requests
-flask
-scikit-learn
-joblib
-websocket-client
 deriv
+requests
+numpy
+websocket-client
