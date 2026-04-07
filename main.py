@@ -17,7 +17,7 @@ def enviar_telegram(msg):
             print("❌ TELEGRAM NO CONFIGURADO")
             return
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+        requests.post(url, data={"chat_id": CHAT_ID, "text": msg}, timeout=10)
     except Exception as e:
         print("❌ Error Telegram:", e)
 
@@ -25,8 +25,8 @@ def enviar_telegram(msg):
 # PARÁMETROS DE TRADING
 # =========================
 pares = ["R_10", "R_25", "R_50"]
-MONTO = 0.10           # Bajado para seguridad
-LIMITE_PERDIDA = -50   # Límite de pérdida diaria
+MONTO = 0.10           
+LIMITE_PERDIDA = -50   
 
 # Variables de control
 martingala = 1
@@ -44,22 +44,35 @@ def ejecutar_bot():
 
     while True:
         try:
-            print("\n🔄 NUEVO CICLO DE ANÁLISIS")
+            print("\n----------------------------------------")
+            print("🔄 NUEVO CICLO DE ANÁLISIS")
+            print("----------------------------------------")
 
             for par in pares:
                 print(f"\n📊 Analizando {par}...")
 
-                # 1. CONECTAR A DERIV
+                # 1. CONECTAR CON TIEMPO LÍMITE
                 bot = DerivBot()
-                if not bot.conectar():
-                    print("❌ No se pudo conectar a Deriv (posible límite alcanzado)")
-                    print("⏳ Esperando 60 segundos antes de intentar de nuevo...")
-                    time.sleep(60)  # Esperamos mucho si falla
+                try:
+                    conectado = bot.conectar()
+                    if not conectado:
+                        print("❌ Falló conexión. Esperando 10 seg...")
+                        time.sleep(10)
+                        continue
+                except Exception as e:
+                    print(f"💥 ERROR CONEXIÓN: {e}")
+                    time.sleep(15)
                     continue
 
                 # 2. OBTENER DATOS
-                velas = bot.get_candles(par)
-                print(f"📈 Velas recibidas: {len(velas)}")
+                try:
+                    velas = bot.get_candles(par)
+                    print(f"📈 Velas recibidas: {len(velas)}")
+                except Exception as e:
+                    print(f"💥 ERROR DATOS: {e}")
+                    bot.cerrar()
+                    time.sleep(10)
+                    continue
 
                 if len(velas) < 20:
                     print("⚠️ Pocos datos, saltando...")
@@ -67,89 +80,82 @@ def ejecutar_bot():
                     time.sleep(5)
                     continue
 
-                # 3. ANÁLISIS CON IA Y MEMORIA
+                # 3. ANÁLISIS
                 score, tipo, datos_ia = analizar_mercado(par, velas)
                 confianza = calcular_confianza(score)
                 decision = decision_final(tipo, score, confianza)
 
                 print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
 
-                # 4. SI NO HAY SEÑAL, SALIR
                 if not decision:
                     print("⏭️  No hay señal confiable, pasamos...")
                     bot.cerrar()
-                    time.sleep(3)  # Pausa corta entre pares
+                    time.sleep(3)
                     continue
 
-                # 5. EJECUTAR OPERACIÓN
+                # 4. EJECUTAR
                 monto_actual = MONTO * martingala
                 enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Confianza: {confianza}% | Monto: {monto_actual}")
 
-                contract_id = bot.comprar(par, decision, monto_actual)
+                try:
+                    contract_id = bot.comprar(par, decision, monto_actual)
+                    if not contract_id:
+                        print("❌ Falló compra")
+                        bot.cerrar()
+                        time.sleep(10)
+                        continue
 
-                if not contract_id:
-                    print("❌ Falló la ejecución de la compra")
+                    # 5. ESPERAR Y VER RESULTADO
+                    print("⏳ Esperando cierre...")
+                    profit = bot.check_result(contract_id)
+                    bot.cerrar()
+
+                    # 🧠 APRENDER
+                    aprender_resultado(profit, datos_ia)
+
+                    # GESTIÓN CAPITAL
+                    if profit > 0:
+                        enviar_telegram(f"✅ GANADA | +{profit} USD 🧠")
+                        martingala = 1
+                        racha_perdidas = 0
+                    else:
+                        enviar_telegram(f"❌ PERDIDA | {profit} USD 🧠")
+                        racha_perdidas += 1
+                        perdidas_dia += profit
+                        
+                        if racha_perdidas >= 2:
+                            print("🛑 Reseteamos monto por seguridad")
+                            martingala = 1
+                        else:
+                            martingala *= 1.5
+
+                    if perdidas_dia <= LIMITE_PERDIDA:
+                        enviar_telegram("🛑 LÍMITE ALCANZADO. BOT DETENIDO.")
+                        return
+
+                except Exception as e:
+                    print(f"💥 ERROR EJECUCIÓN: {e}")
                     bot.cerrar()
                     time.sleep(10)
-                    continue
 
-                # 6. ESPERAR Y VER RESULTADO
-                print("⏳ Esperando cierre de operación...")
-                profit = bot.check_result(contract_id)
-                bot.cerrar()
-
-                # ==================================
-                # 🧠 SISTEMA DE APRENDIZAJE
-                # ==================================
-                aprender_resultado(profit, datos_ia)
-
-                # ==================================
-                # GESTIÓN DE CAPITAL (MÁS SEGURA)
-                # ==================================
-                if profit > 0:
-                    enviar_telegram(f"✅ GANADA | +{profit} USD 🧠 +1 Experiencia")
-                    martingala = 1
-                    racha_perdidas = 0
-                else:
-                    enviar_telegram(f"❌ PERDIDA | {profit} USD 🧠 Ajustando estrategia...")
-                    racha_perdidas += 1
-                    perdidas_dia += profit
-                    
-                    # Martingala MODIFICADA (más segura)
-                    if racha_perdidas >= 2:
-                        print("🛑 Racha de pérdidas, reseteamos monto para proteger cuenta")
-                        martingala = 1
-                    else:
-                        martingala *= 1.5  # Aumenta suave, no duplica bruscamente
-
-                # ==================================
-                # CONTROL DE RIESGO TOTAL
-                # ==================================
-                if perdidas_dia <= LIMITE_PERDIDA:
-                    enviar_telegram("🛑 LÍMITE DE PÉRDIDA ALCANZADO. BOT DETENIDO POR SEGURIDAD.")
-                    print("🛑 Bot detenido.")
-                    return
-
-                time.sleep(5)  # Pausa entre operaciones
+                time.sleep(5)
 
             # ==================================
-            # ⏳ PAUSA GRANDE ENTRE CICLOS COMPLETOS
-            # MUY IMPORTANTE PARA NO BLOQUEAR LA API
+            # ⏳ PAUSA GRANDE FINAL
             # ==================================
-            print("\n⏳ Ciclo terminado. Esperando 30 segundos antes del próximo análisis...")
-            time.sleep(30)
+            print("\n✅ Ciclo completo. Esperando 45 segundos...")
+            time.sleep(45)
 
         except Exception as e:
-            print("❌ ERROR EN EL SISTEMA:", e)
-            enviar_telegram(f"⚠️ ERROR CRÍTICO: {e}")
-            print("⏳ Esperando 60 segundos por seguridad...")
-            time.sleep(60)  # Si hay error grave, esperamos 1 minuto
+            print(f"\n💥 ERROR GLOBAL: {e}")
+            print("⏳ Reiniciando ciclo en 30 segundos...")
+            time.sleep(30)
 
 # =========================
-# INICIAR BOT
+# INICIAR
 # =========================
 if __name__ == "__main__":
     try:
         ejecutar_bot()
     except KeyboardInterrupt:
-        print("👋 Bot detenido por el usuario")
+        print("👋 Bot detenido")
