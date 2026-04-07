@@ -8,34 +8,31 @@ import json
 ARCHIVO_MEMORIA = "memoria.json"
 
 def cargar_memoria():
-    """Carga la experiencia pasada"""
     if os.path.exists(ARCHIVO_MEMORIA):
         with open(ARCHIVO_MEMORIA, 'r') as f:
             return json.load(f)
-    return {"stats": {"ganadas": 0, "perdidas": 0}, "config": {"rsi_min_compra": 35, "rsi_max_venta": 65, "fuerza_minima": 0.001}}
+    return {"stats": {"ganadas": 0, "perdidas": 0}, "config": {"rsi_min_compra": 45, "rsi_max_venta": 55, "fuerza_minima": 0.0005}}
 
 def guardar_memoria(datos):
-    """Guarda la experiencia"""
     with open(ARCHIVO_MEMORIA, 'w') as f:
         json.dump(datos, f, indent=2)
 
 def aprender_resultado(resultado, analisis):
-    """La IA aprende si la señal fue buena o mala"""
     memoria = cargar_memoria()
-    
     if resultado > 0:
         memoria["stats"]["ganadas"] += 1
-        print("🧠 ✅ Aprendiendo: Estrategia ACERTADA")
+        print("🧠 ✅ APRENDIZAJE: Estrategia buena")
     else:
         memoria["stats"]["perdidas"] += 1
-        print("🧠 ❌ Aprendiendo: Estrategia FALLIDA, ajustando...")
-        
-        # AJUSTE AUTOMÁTICO: Si falla, hacemos los filtros MÁS ESTRICTOS
+        print("🧠 ❌ APRENDIZAJE: Ajustando...")
         if analisis["tipo"] == "call":
-            memoria["config"]["rsi_min_compra"] += 2  # Exigimos más barato
+            memoria["config"]["rsi_min_compra"] -= 2
         else:
-            memoria["config"]["rsi_max_venta"] -= 2  # Exigimos más caro
+            memoria["config"]["rsi_max_venta"] += 2
             
+    # Limites para no romperse
+    memoria["config"]["rsi_min_compra"] = max(20, memoria["config"]["rsi_min_compra"])
+    memoria["config"]["rsi_max_venta"] = min(80, memoria["config"]["rsi_max_venta"])
     guardar_memoria(memoria)
 
 # =========================
@@ -84,7 +81,6 @@ def analizar_mercado(par, velas):
     if len(closes) < 30:
         return 0, None, {}
 
-    # Calculamos indicadores
     ema9 = calcular_ema(closes, 9)
     ema21 = calcular_ema(closes, 21)
     rsi = calcular_rsi(closes, 14)
@@ -94,49 +90,48 @@ def analizar_mercado(par, velas):
     score = 0
     tipo = None
 
-    # 1. FILTRO DE TENDENCIA FUERTE
-    if precio > ema9 > ema21:
+    # 1. TENDENCIA (MÁS FÁCIL DE ACTIVAR)
+    if precio > ema9 and ema9 > ema21:
         score += 1
         tipo = "call"
-    elif precio < ema9 < ema21:
+    elif precio < ema9 and ema9 < ema21:
         score += 1
         tipo = "put"
+    # Permitimos tendencia leve también
+    elif precio > ema9 or precio > ema21:
+        score += 0.5
+        tipo = "call"
+    elif precio < ema9 or precio < ema21:
+        score += 0.5
+        tipo = "put"
     else:
-        return 0, None, {} # Sin tendencia clara = NO OPERAR
+        return 0, None, {}
 
-    # 2. FILTRO RSI (USA LA MEMORIA)
+    # 2. RSI (MÁS FLEXIBLE)
     if tipo == "call" and rsi < config["rsi_min_compra"]:
         score +=1
     elif tipo == "put" and rsi > config["rsi_max_venta"]:
         score +=1
-    else:
-        score -=1 # Castigo si no está en zona óptima aprendida
 
-    # 3. FILTRO UBICACIÓN
+    # 3. UBICACIÓN
     if (tipo == "call" and precio < banda_med) or (tipo == "put" and precio > banda_med):
         score +=1
 
-    # Datos para aprender después
-    datos_analisis = {
-        "tipo": tipo,
-        "rsi": rsi,
-        "score": score
-    }
-
+    datos_analisis = {"tipo": tipo, "rsi": rsi, "score": score}
     return score, tipo, datos_analisis
 
 # =========================
 # CONFIANZA
 # =========================
 def calcular_confianza(score):
-    if score >= 3:
-        return 95
-    elif score == 2:
-        return 85
+    if score >= 2.5:
+        return 90
+    elif score >= 1.5:
+        return 75
     else:
         return 0
 
 def decision_final(tipo, score, confianza):
-    if score >= 2 and confianza >= 80:
+    if score >= 1.5 and confianza >= 70:
         return tipo
     return None
