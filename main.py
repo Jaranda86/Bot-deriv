@@ -38,7 +38,7 @@ perdidas_dia = 0
 def ejecutar_bot():
     global martingala, racha_perdidas, perdidas_dia
 
-    print("🚀 BOT INICIADO - MODO DEBUG ACTIVO")
+    print("🚀 BOT INICIADO - MODO DEBUG FORZADO")
     enviar_telegram("🤖 BOT IA PRO - INICIADO Y MONITOREEANDO 📊")
 
     while True:
@@ -49,6 +49,7 @@ def ejecutar_bot():
 
             for par in pares:
                 print(f"\n📊 ANALIZANDO {par}...")
+                contract_id = None # Inicializar vacío
 
                 bot = DerivBot()
                 conectado = False
@@ -96,7 +97,7 @@ def ejecutar_bot():
                     continue
 
                 # ==================================
-                # 💸 EJECUCIÓN REAL
+                # 💸 EJECUCIÓN
                 # ==================================
                 monto_actual = MONTO * martingala
                 print(f"💰 INTENTANDO COMPRAR: {par} | {decision} | Monto: {monto_actual}")
@@ -104,9 +105,15 @@ def ejecutar_bot():
                 enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Confianza: {confianza}% | Monto: {monto_actual}")
 
                 try:
+                    # ==================================
+                    # ✅ INTENTO DE COMPRA
+                    # ==================================
+                    print("📤 ENVIANDO ORDEN A DERIV...")
                     contract_id = bot.comprar(par, decision, monto_actual)
                     
-                    if contract_id:
+                    print(f"📥 RESPUESTA RECIBIDA. contract_id = {contract_id}")
+
+                    if contract_id and contract_id != "None":
                         print(f"✅ ORDEN ENVIADA! ID: {contract_id}")
                         
                         # ESPERAR RESULTADO
@@ -138,14 +145,23 @@ def ejecutar_bot():
                             return
 
                     else:
-                        print("❌ FALLO CRÍTICO: contract_id es NINGUNO")
-                        print("⚠️ Posible causa: Saldo insuficiente, Permisos, o API rechazó")
+                        # ==================================
+                        # ❌ AQUÍ ES DONDE FALLA
+                        # ==================================
+                        print("❌ FALLO CRÍTICO: contract_id es NULO o VACÍO")
+                        print("⚠️ POSIBLES CAUSAS:")
+                        print("   1. Saldo insuficiente en Deriv")
+                        print("   2. Token sin permisos de trading")
+                        print("   3. Duración o parámetros incorrectos")
+                        print("   4. Conexión cortada al enviar")
+                        
+                        enviar_telegram(f"⚠️ FALLO EJECUCIÓN EN {par} | contract_id = {contract_id}")
                         bot.cerrar()
-                        enviar_telegram(f"⚠️ FALLO EJECUCIÓN EN {par} | Revisar logs")
                         time.sleep(10)
 
                 except Exception as e:
                     print(f"💥 ERROR EN EJECUCIÓN: {e}")
+                    enviar_telegram(f"💥 EXCEPCIÓN: {e}")
                     bot.cerrar()
                     time.sleep(10)
 
