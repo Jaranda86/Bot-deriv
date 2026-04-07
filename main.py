@@ -1,3 +1,4 @@
+import asyncio
 import time
 import os
 import requests
@@ -35,11 +36,11 @@ perdidas_dia = 0
 # =========================
 # BUCLE PRINCIPAL
 # =========================
-def ejecutar_bot():
+async def ejecutar_bot():
     global martingala, racha_perdidas, perdidas_dia
 
-    print("🚀 BOT INICIADO - MODO DEBUG FORZADO")
-    enviar_telegram("🤖 BOT IA PRO - INICIADO Y MONITOREEANDO 📊")
+    print("🚀 BOT INICIADO - USANDO LIBRERÍA OFICIAL DERIV")
+    enviar_telegram("🤖 BOT IA PRO - MODO LIBRERÍA OFICIAL 📚")
 
     while True:
         try:
@@ -49,34 +50,20 @@ def ejecutar_bot():
 
             for par in pares:
                 print(f"\n📊 ANALIZANDO {par}...")
-                contract_id = None # Inicializar vacío
+                contract_id = None
 
                 bot = DerivBot()
-                conectado = False
                 
-                try:
-                    print("🔌 Conectando...")
-                    conectado = bot.conectar()
-                    if conectado:
-                        print("✅ CONEXIÓN EXITOSA")
-                    else:
-                        print("❌ FALLO CONEXIÓN")
-                        time.sleep(5)
-                        continue
-                except Exception as e:
-                    print(f"💥 ERROR CONECTANDO: {e}")
-                    time.sleep(10)
+                # CONECTAR
+                conectado = await bot.conectar()
+                if not conectado:
+                    print("❌ FALLO CONEXIÓN")
+                    time.sleep(5)
                     continue
 
-                # OBTENER VELAS
-                try:
-                    print("📥 Pidiendo velas...")
-                    velas = bot.get_candles(par)
-                    print(f"📈 Velas recibidas: {len(velas)}")
-                except Exception as e:
-                    print(f"💥 ERROR VELAS: {e}")
-                    bot.cerrar()
-                    continue
+                # VELAS
+                velas = await bot.get_candles(par)
+                print(f"📈 Velas recibidas: {len(velas)}")
 
                 if len(velas) < 20:
                     print("⚠️ Pocos datos")
@@ -96,34 +83,22 @@ def ejecutar_bot():
                     time.sleep(2)
                     continue
 
-                # ==================================
-                # 💸 EJECUCIÓN
-                # ==================================
+                # EJECUTAR
                 monto_actual = MONTO * martingala
-                print(f"💰 INTENTANDO COMPRAR: {par} | {decision} | Monto: {monto_actual}")
-                
                 enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Confianza: {confianza}% | Monto: {monto_actual}")
 
                 try:
-                    # ==================================
-                    # ✅ INTENTO DE COMPRA
-                    # ==================================
-                    print("📤 ENVIANDO ORDEN A DERIV...")
-                    contract_id = bot.comprar(par, decision, monto_actual)
-                    
-                    print(f"📥 RESPUESTA RECIBIDA. contract_id = {contract_id}")
+                    contract_id = await bot.comprar(par, decision, monto_actual)
+                    print(f"📥 contract_id = {contract_id}")
 
-                    if contract_id and contract_id != "None":
+                    if contract_id:
                         print(f"✅ ORDEN ENVIADA! ID: {contract_id}")
                         
-                        # ESPERAR RESULTADO
-                        print("⏳ Esperando resultado...")
-                        profit = bot.check_result(contract_id)
-                        print(f"🏁 RESULTADO FINAL: Profit = {profit}")
+                        profit = await bot.check_result(contract_id)
+                        print(f"🏁 RESULTADO: Profit = {profit}")
                         
                         bot.cerrar()
 
-                        # APRENDER
                         aprender_resultado(profit, datos_ia)
 
                         if profit > 0:
@@ -145,22 +120,13 @@ def ejecutar_bot():
                             return
 
                     else:
-                        # ==================================
-                        # ❌ AQUÍ ES DONDE FALLA
-                        # ==================================
-                        print("❌ FALLO CRÍTICO: contract_id es NULO o VACÍO")
-                        print("⚠️ POSIBLES CAUSAS:")
-                        print("   1. Saldo insuficiente en Deriv")
-                        print("   2. Token sin permisos de trading")
-                        print("   3. Duración o parámetros incorrectos")
-                        print("   4. Conexión cortada al enviar")
-                        
-                        enviar_telegram(f"⚠️ FALLO EJECUCIÓN EN {par} | contract_id = {contract_id}")
+                        print("❌ FALLO: contract_id es None")
+                        enviar_telegram(f"⚠️ FALLO EJECUCIÓN EN {par} | contract_id = None")
                         bot.cerrar()
                         time.sleep(10)
 
                 except Exception as e:
-                    print(f"💥 ERROR EN EJECUCIÓN: {e}")
+                    print(f"💥 ERROR EJECUCIÓN: {e}")
                     enviar_telegram(f"💥 EXCEPCIÓN: {e}")
                     bot.cerrar()
                     time.sleep(10)
@@ -168,14 +134,14 @@ def ejecutar_bot():
                 time.sleep(5)
 
             print("\n✅ Ciclo terminado. Esperando 45s...")
-            time.sleep(45)
+            await asyncio.sleep(45)
 
         except Exception as e:
             print(f"💥 ERROR GLOBAL: {e}")
-            time.sleep(30)
+            await asyncio.sleep(30)
 
 # =========================
 # INICIAR
 # =========================
 if __name__ == "__main__":
-    ejecutar_bot()
+    asyncio.run(ejecutar_bot())
