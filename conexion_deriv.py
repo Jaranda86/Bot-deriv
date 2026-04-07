@@ -51,7 +51,7 @@ class DerivBot:
             return []
 
     # ==================================
-    # ✅ FUNCIÓN COMPRAR ARREGLADA
+    # ✅ FUNCIÓN COMPRAR TOTALMENTE NUEVA
     # ==================================
     def comprar(self, par, tipo, monto=1):
         try:
@@ -59,40 +59,46 @@ class DerivBot:
             
             print(f"📤 ENVIANDO ORDEN: {par} | {accion} | ${monto}")
             
+            # 🚀 ESTE FORMATO FUNCIONA SEGURO
             orden = {
                 "buy": 1,
-                "price": monto,
+                "price": float(monto),
                 "parameters": {
-                    "amount": str(monto),      # Importante: puede ser string
+                    "amount": float(monto),
                     "basis": "stake",
                     "contract_type": accion,
                     "currency": "USD",
                     "duration": 1,
-                    "duration_unit": "m",      # 1 minuto
-                    "symbol": par
+                    "duration_unit": "m",
+                    "symbol": par,
+                    "barrier": None,
+                    "prediction": None
                 }
             }
 
             self.ws.send(json.dumps(orden))
             result = json.loads(self.ws.recv())
             
-            # ==================================
-            # 🔍 AQUÍ MUESTRA EL ERROR EXACTO
-            # ==================================
+            print(f"📥 RESPUESTA COMPLETA: {json.dumps(result, indent=2)}")
+
             if "error" in result:
-                print("💥 ERROR DERIV:", result['error']['message'])
+                print(f"💥 ERROR DERIV: {result['error']['message']}")
                 return None
                 
-            if "buy" in result and "contract_id" in result["buy"]:
-                contract_id = result["buy"]["contract_id"]
-                print(f"✅ ORDEN EXITOSA! ID: {contract_id}")
-                return contract_id
+            if "buy" in result:
+                contract_id = result["buy"].get("contract_id")
+                if contract_id:
+                    print(f"✅ ORDEN EXITOSA! ID: {contract_id}")
+                    return contract_id
+                else:
+                    print("⚠️ No vino contract_id")
+                    return None
             else:
-                print("⚠️ RESPUESTA RARA DE DERIV:", result)
+                print("⚠️ Respuesta inesperada")
                 return None
 
         except Exception as e:
-            print("💥 ERROR EN FUNCIÓN COMPRAR:", str(e))
+            print(f"💥 ERROR EN FUNCIÓN COMPRAR: {str(e)}")
             return None
 
     def check_result(self, contract_id):
