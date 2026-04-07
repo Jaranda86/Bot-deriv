@@ -14,7 +14,7 @@ class DerivBot:
             time.sleep(0.5)
             self.ws = websocket.create_connection(
                 "wss://ws.derivws.com/websockets/v3?app_id=1089",
-                timeout=20
+                timeout=30
             )
             self.ws.send(json.dumps({"authorize": self.token}))
             response = json.loads(self.ws.recv())
@@ -51,50 +51,62 @@ class DerivBot:
             return []
 
     # ==================================
-    # ✅ FUNCIÓN COMPRAR TOTALMENTE NUEVA
+    # ✅ MÉTODO NUEVO: PROPOSAL + BUY
     # ==================================
     def comprar(self, par, tipo, monto=1):
         try:
             accion = "CALL" if tipo.lower() == "call" else "PUT"
-            
             print(f"📤 ENVIANDO ORDEN: {par} | {accion} | ${monto}")
-            
-            # 🚀 ESTE FORMATO FUNCIONA SEGURO
+
+            # PASO 1: PEDIR PROPUESTA (COTIZACIÓN)
+            propuesta = {
+                "proposal": 1,
+                "amount": monto,
+                "basis": "stake",
+                "contract_type": accion,
+                "currency": "USD",
+                "duration": 1,
+                "duration_unit": "m",
+                "symbol": par
+            }
+
+            self.ws.send(json.dumps(propuesta))
+            res_prop = json.loads(self.ws.recv())
+
+            if "error" in res_prop:
+                print(f"💥 ERROR PROPUESTA: {res_prop['error']['message']}")
+                return None
+
+            if "proposal" not in res_prop:
+                print("⚠️ No llegó proposal")
+                return None
+
+            proposal_id = res_prop["proposal"].get("id")
+            if not proposal_id:
+                print("⚠️ No vino ID")
+                return None
+
+            # PASO 2: COMPRAR USANDO EL ID
             orden = {
-                "buy": 1,
-                "price": float(monto),
-                "parameters": {
-                    "amount": float(monto),
-                    "basis": "stake",
-                    "contract_type": accion,
-                    "currency": "USD",
-                    "duration": 1,
-                    "duration_unit": "m",
-                    "symbol": par,
-                    "barrier": None,
-                    "prediction": None
-                }
+                "buy": proposal_id,
+                "price": monto
             }
 
             self.ws.send(json.dumps(orden))
             result = json.loads(self.ws.recv())
-            
-            print(f"📥 RESPUESTA COMPLETA: {json.dumps(result, indent=2)}")
+
+            print(f"📥 RESPUESTA FINAL: {json.dumps(result, indent=2)}")
 
             if "error" in result:
-                print(f"💥 ERROR DERIV: {result['error']['message']}")
+                print(f"💥 ERROR COMPRA: {result['error']['message']}")
                 return None
-                
-            if "buy" in result:
-                contract_id = result["buy"].get("contract_id")
-                if contract_id:
-                    print(f"✅ ORDEN EXITOSA! ID: {contract_id}")
-                    return contract_id
-                else:
-                    print("⚠️ No vino contract_id")
-                    return None
+
+            if "buy" in result and "contract_id" in result["buy"]:
+                contract_id = result["buy"]["contract_id"]
+                print(f"✅ ORDEN EXITOSA! ID: {contract_id}")
+                return contract_id
             else:
-                print("⚠️ Respuesta inesperada")
+                print("⚠️ Respuesta sin contract_id")
                 return None
 
         except Exception as e:
