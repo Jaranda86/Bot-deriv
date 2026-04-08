@@ -2,6 +2,7 @@ import websocket
 import json
 import os
 import time
+import sys
 
 class DerivBot:
 
@@ -11,20 +12,26 @@ class DerivBot:
 
     def conectar(self):
         try:
-            time.sleep(0.5)
+            print("🔌 INTENTANDO CONECTAR...", file=sys.stderr)
             self.ws = websocket.create_connection(
                 "wss://ws.derivws.com/websockets/v3?app_id=1089",
-                timeout=30
+                timeout=10  # ⏱️ TIMEOUT CORTO PARA NO CONGELARSE
             )
+            print("📤 ENVIANDO TOKEN...", file=sys.stderr)
             self.ws.send(json.dumps({"authorize": self.token}))
             response = json.loads(self.ws.recv())
+            
+            print(f"📥 RESPUESTA AUTORIZACIÓN: {response}", file=sys.stderr)
+
             if "error" in response:
-                print("❌ ERROR AUTORIZACIÓN:", response['error']['message'])
+                print(f"❌ ERROR: {response['error']['message']}", file=sys.stderr)
                 return False
-            print("✅ Conectado y Autorizado OK")
+                
+            print("✅ CONECTADO Y AUTORIZADO!", file=sys.stderr)
             return True
+            
         except Exception as e:
-            print("❌ ERROR CONEXIÓN:", str(e))
+            print(f"💥 ERROR CONEXIÓN: {str(e)}", file=sys.stderr)
             return False
 
     def cerrar(self):
@@ -36,10 +43,11 @@ class DerivBot:
 
     def get_candles(self, symbol):
         try:
+            print("📥 PIDIENDO VELAS...", file=sys.stderr)
             self.ws.send(json.dumps({
                 "ticks_history": symbol,
                 "adjust_start_time": 1,
-                "count": 50,
+                "count": 20,
                 "end": "latest",
                 "granularity": 60,
                 "style": "candles"
@@ -47,20 +55,19 @@ class DerivBot:
             response = json.loads(self.ws.recv())
             return response.get("candles", [])
         except Exception as e:
-            print("❌ ERROR VELAS:", str(e))
+            print(f"❌ ERROR VELAS: {str(e)}", file=sys.stderr)
             return []
 
     def comprar(self, par, tipo, monto=1):
         try:
             accion = "CALL" if tipo.lower() == "call" else "PUT"
-            print(f"📤 ENVIANDO ORDEN: {par} | {accion} | ${monto}")
+            print(f"📤 ENVIANDO ORDEN: {par} | {accion} | ${monto}", file=sys.stderr)
 
-            # 🚀 FORMATO FINAL
             orden = {
                 "buy": 1,
-                "price": monto,
+                "price": float(monto),
                 "parameters": {
-                    "amount": monto,
+                    "amount": float(monto),
                     "basis": "stake",
                     "contract_type": accion,
                     "currency": "USD",
@@ -73,30 +80,23 @@ class DerivBot:
             self.ws.send(json.dumps(orden))
             result = json.loads(self.ws.recv())
             
-            # ✅ FUERZA LA IMPRESIÓN
-            print("-"*50)
-            print("📥 RESPUESTA DE DERIV:")
-            print(json.dumps(result, indent=2))
-            print("-"*50)
+            print("="*60, file=sys.stderr)
+            print("📥 RESPUESTA DERIV COMPLETA:", file=sys.stderr)
+            print(json.dumps(result, indent=2), file=sys.stderr)
+            print("="*60, file=sys.stderr)
 
             if "error" in result:
-                print(f"💥 ERROR DERIV: {result['error']['message']}")
+                print(f"💥 ERROR DERIV: {result['error']['message']}", file=sys.stderr)
                 return None
                 
             if "buy" in result:
-                contract_id = result["buy"].get("contract_id")
-                if contract_id:
-                    print(f"✅ ORDEN EXITOSA! ID: {contract_id}")
-                    return contract_id
-                else:
-                    print("⚠️ No vino contract_id")
-                    return None
+                return result["buy"].get("contract_id")
             else:
-                print("⚠️ Respuesta inesperada")
+                print("⚠️ NO HAY CONTRACT_ID", file=sys.stderr)
                 return None
 
         except Exception as e:
-            print(f"💥 ERROR EN FUNCIÓN COMPRAR: {str(e)}")
+            print(f"💥 ERROR EN COMPRAR: {str(e)}", file=sys.stderr)
             return None
 
     def check_result(self, contract_id):
@@ -110,9 +110,8 @@ class DerivBot:
                 if "proposal_open_contract" in result:
                     contract = result["proposal_open_contract"]
                     if contract.get("is_sold", False):
-                        profit = float(contract.get("profit", 0))
-                        print(f"🏁 RESULTADO: Profit = {profit}")
-                        return profit
+                        return float(contract.get("profit", 0))
+                time.sleep(1)
         except Exception as e:
-            print("❌ ERROR ESPERANDO RESULTADO:", str(e))
+            print(f"❌ ERROR RESULTADO: {str(e)}", file=sys.stderr)
             return 0
