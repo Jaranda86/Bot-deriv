@@ -135,4 +135,20 @@ def ejecutar_bot():
                 except Exception as e:
                     print(f"💥 ERROR EJECUCIÓN: {e}")
                     enviar_telegram(f"💥 EXCEPCIÓN: {e}")
-                   
+                    bot.cerrar()
+                    time.sleep(10)
+
+                time.sleep(5)
+
+            print("\n✅ Ciclo terminado. Esperando 60s...")
+            time.sleep(60)
+
+        except Exception as e:
+            print(f"💥 ERROR GLOBAL: {e}")
+            time.sleep(30)
+
+# =========================
+# INICIAR
+# =========================
+if __name__ == "__main__":
+    ejecutar_bot()
