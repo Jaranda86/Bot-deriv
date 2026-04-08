@@ -9,11 +9,10 @@ class DerivBot:
     def __init__(self):
         self.token = os.getenv("DERIV_TOKEN")
         self.ws = None
-        self.autorizado = False  # Bandera para no autorizar mil veces
+        self.autorizado = False
 
     def conectar(self):
         try:
-            # Si ya está conectado, no hacer nada
             if self.ws and self.autorizado:
                 print("✅ Ya conectado y autorizado", file=sys.stderr)
                 return True
@@ -21,7 +20,7 @@ class DerivBot:
             print("🔌 INTENTANDO CONECTAR...", file=sys.stderr)
             self.ws = websocket.create_connection(
                 "wss://ws.derivws.com/websockets/v3?app_id=1089",
-                timeout=15
+                timeout=20
             )
             
             print("📤 ENVIANDO TOKEN...", file=sys.stderr)
@@ -32,7 +31,6 @@ class DerivBot:
 
             if "error" in response:
                 print(f"❌ ERROR: {response['error']['message']}", file=sys.stderr)
-                # Si es límite de peticiones, esperar un poco
                 if "rate limit" in response['error']['message']:
                     print("⏳ ESPERANDO 60 SEG POR LÍMITE...", file=sys.stderr)
                     time.sleep(60)
@@ -45,6 +43,9 @@ class DerivBot:
         except Exception as e:
             print(f"💥 ERROR CONEXIÓN: {str(e)}", file=sys.stderr)
             self.autorizado = False
+            # Esperar un poco antes de volver a intentar
+            print("⏳ ESPERANDO 10 SEG...", file=sys.stderr)
+            time.sleep(10)
             return False
 
     def cerrar(self):
@@ -102,7 +103,6 @@ class DerivBot:
 
             if "error" in result:
                 print(f"💥 ERROR DERIV: {result['error']['message']}", file=sys.stderr)
-                # Si es límite de peticiones, esperar
                 if "rate limit" in result['error']['message']:
                     print("⏳ ESPERANDO 60 SEG...", file=sys.stderr)
                     time.sleep(60)
@@ -130,10 +130,9 @@ class DerivBot:
             }))
 
             while True:
-                # ⏱️ TIMEOUT DE SEGURIDAD
                 if time.time() - start_time > 70:
                     print("⏰ TIMEOUT - CERRANDO CONEXIÓN", file=sys.stderr)
-                    self.autorizado = False
+                    self.cerrar()
                     return 0
 
                 try:
