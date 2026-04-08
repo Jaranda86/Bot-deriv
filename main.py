@@ -25,7 +25,7 @@ def enviar_telegram(msg):
 # PARÁMETROS
 # =========================
 pares = ["R_10", "R_25", "R_50"]
-MONTO = 0.35           
+MONTO_BASE = 0.35           
 LIMITE_PERDIDA = -50.00   
 
 martingala = 1
@@ -38,7 +38,7 @@ perdidas_dia = 0
 def ejecutar_bot():
     global martingala, racha_perdidas, perdidas_dia
 
-    print("🚀 BOT INICIADO - MODO ULTRA RÁPIDO 🚀")
+    print("🚀 BOT INICIADO - MODO ULTRA ESTABLE 🚀")
     enviar_telegram("🤖 BOT IA PRO - ACTIVADO | MODO FÁCIL 📊")
 
     while True:
@@ -85,12 +85,14 @@ def ejecutar_bot():
                         continue
 
                     # ==================================
-                    # 💸 EJECUTAR
+                    # 💸 CALCULAR MONTO CORRECTO
                     # ==================================
-                    monto_actual = MONTO * martingala
-                    enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Monto: {monto_actual}")
+                    monto_bruto = MONTO_BASE * martingala
+                    monto_final = round(monto_bruto, 2)  # ✅ REDONDEAR A 2 DECIMALES
+                    
+                    enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Monto: {monto_final}")
 
-                    contract_id = bot.comprar(par, decision, monto_actual)
+                    contract_id = bot.comprar(par, decision, monto_final)
                     print(f"📥 contract_id = {contract_id}")
 
                     if contract_id:
@@ -129,7 +131,6 @@ def ejecutar_bot():
 
                 except Exception as e:
                     print(f"💥 ERROR EN {par}: {e}")
-                    # Si hay error, esperar un poco
                     time.sleep(10)
 
             # ==================================
@@ -137,15 +138,14 @@ def ejecutar_bot():
             # ==================================
             print("\n✅ Ciclo terminado. Cerrando conexión...")
             bot.cerrar()
-            print("⏳ ESPERANDO 60 SEGUNDOS ANTES DE VOLVER A EMPEZAR...")
+            print("⏳ ESPERANDO 60 SEGUNDOS...")
             time.sleep(60)
 
         except Exception as e:
             print(f"💥 ERROR GLOBAL: {e}")
             if bot:
                 bot.cerrar()
-            # 💡 SI HAY ERROR DE CONEXIÓN O LÍMITE, ESPERAR 60 SEG
-            print("⏳ ESPERANDO 60 SEGUNDOS POR LÍMITE...")
+            print("⏳ ESPERANDO 60 SEGUNDOS...")
             time.sleep(60)
 
 # =========================
