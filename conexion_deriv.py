@@ -1,165 +1,152 @@
-import websocket
-import json
-import os
 import time
-import sys
+import os
+import requests
+from conexion_deriv import DerivBot
+from ia_pro_v1 import analizar_mercado, calcular_confianza, decision_final, aprender_resultado
 
-class DerivBot:
+# =========================
+# CONFIGURACIÓN TELEGRAM
+# =========================
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-    def __init__(self):
-        self.token = os.getenv("DERIV_TOKEN")
-        self.ws = None
-        self.autorizado = False
+def enviar_telegram(msg):
+    try:
+        print("📤 ENVIANDO A TG:", msg)
+        if not TOKEN or not CHAT_ID:
+            print("❌ TELEGRAM NO CONFIGURADO")
+            return
+        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        requests.post(url, data={"chat_id": CHAT_ID, "text": msg}, timeout=10)
+    except Exception as e:
+        print("❌ ERROR TG:", e)
 
-    def conectar(self):
+# =========================
+# PARÁMETROS
+# =========================
+pares = ["R_10", "R_25", "R_50"]
+MONTO = 0.35           
+LIMITE_PERDIDA = -50.00   
+
+martingala = 1
+racha_perdidas = 0
+perdidas_dia = 0
+
+# =========================
+# BUCLE PRINCIPAL
+# =========================
+def ejecutar_bot():
+    global martingala, racha_perdidas, perdidas_dia
+
+    print("🚀 BOT INICIADO - MODO CONEXIÓN ÚNICA 🚀")
+    enviar_telegram("🤖 BOT IA PRO - ACTIVADO | MULTI-INDICADORES 📊")
+
+    while True:
+        bot = None
         try:
-            if self.ws and self.autorizado:
-                print("✅ Ya conectado y autorizado", file=sys.stderr)
-                return True
+            print("\n" + "="*60)
+            print("🔄 NUEVO CICLO - CONECTANDO UNA VEZ...")
+            print("="*60)
 
-            print("🔌 INTENTANDO CONECTAR...", file=sys.stderr)
-            self.ws = websocket.create_connection(
-                "wss://ws.derivws.com/websockets/v3?app_id=1089",
-                timeout=30
-            )
-            
-            print("📤 ENVIANDO TOKEN...", file=sys.stderr)
-            self.ws.send(json.dumps({"authorize": self.token}))
-            response = json.loads(self.ws.recv())
-            
-            print(f"📥 RESPUESTA AUTORIZACIÓN: {response}", file=sys.stderr)
+            # 💡 CONECTAR SOLO UNA VEZ AL INICIO DEL CICLO
+            bot = DerivBot()
+            conectado = bot.conectar()
+            if not conectado:
+                print("❌ NO SE PUDO CONECTAR - ESPERANDO...")
+                time.sleep(30)
+                continue
 
-            if "error" in response:
-                print(f"❌ ERROR: {response['error']['message']}", file=sys.stderr)
-                if "rate limit" in response['error']['message']:
-                    print("⏳ ESPERANDO 60 SEGUNDOS POR LÍMITE...", file=sys.stderr)
-                    time.sleep(60)
-                return False
-                
-            print("✅ CONECTADO Y AUTORIZADO!", file=sys.stderr)
-            self.autorizado = True
-            return True
-            
-        except Exception as e:
-            print(f"💥 ERROR CONEXIÓN: {str(e)}", file=sys.stderr)
-            self.autorizado = False
-            print("⏳ ESPERANDO 15 SEGUNDOS...", file=sys.stderr)
-            time.sleep(15)
-            return False
-
-    def cerrar(self):
-        try:
-            if self.ws:
-                self.ws.close()
-                self.autorizado = False
-        except:
-            pass
-
-    def get_candles(self, symbol):
-        try:
-            print("📥 PIDIENDO VELAS...", file=sys.stderr)
-            self.ws.send(json.dumps({
-                "ticks_history": symbol,
-                "adjust_start_time": 1,
-                "count": 20,
-                "end": "latest",
-                "granularity": 60,
-                "style": "candles"
-            }))
-            response = json.loads(self.ws.recv())
-            return response.get("candles", [])
-        except Exception as e:
-            print(f"❌ ERROR VELAS: {str(e)}", file=sys.stderr)
-            self.autorizado = False
-            return []
-
-    def comprar(self, par, tipo, monto=0.35):
-        try:
-            accion = "CALL" if tipo.lower() == "call" else "PUT"
-            print(f"📤 ENVIANDO ORDEN: {par} | {accion} | ${monto}", file=sys.stderr)
-
-            orden = {
-                "buy": 1,
-                "price": float(monto),
-                "parameters": {
-                    "amount": float(monto),
-                    "basis": "stake",
-                    "contract_type": accion,
-                    "currency": "USD",
-                    "duration": 1,
-                    "duration_unit": "m",
-                    "symbol": par
-                }
-            }
-
-            self.ws.send(json.dumps(orden))
-            result = json.loads(self.ws.recv())
-            
-            print("="*60, file=sys.stderr)
-            print("📥 RESPUESTA DERIV COMPLETA:", file=sys.stderr)
-            print(json.dumps(result, indent=2), file=sys.stderr)
-            print("="*60, file=sys.stderr)
-
-            if "error" in result:
-                print(f"💥 ERROR DERIV: {result['error']['message']}", file=sys.stderr)
-                if "rate limit" in result['error']['message']:
-                    print("⏳ ESPERANDO 60 SEG...", file=sys.stderr)
-                    time.sleep(60)
-                return None
-                
-            if "buy" in result:
-                return result["buy"].get("contract_id")
-            else:
-                print("⚠️ NO HAY CONTRACT_ID", file=sys.stderr)
-                return None
-
-        except Exception as e:
-            print(f"💥 ERROR EN COMPRAR: {str(e)}", file=sys.stderr)
-            self.autorizado = False
-            return None
-
-    def check_result(self, contract_id):
-        try:
-            print("⌛ ESPERANDO RESULTADO (MAX 80 SEGUNDOS)...", file=sys.stderr)
-            start_time = time.time()
-            profit = 0
-
-            while True:
-                if time.time() - start_time > 80:
-                    print("⏰ TIMEOUT ALCANZADO - INTENTANDO OBTENER RESULTADO...", file=sys.stderr)
-                    try:
-                        self.ws.send(json.dumps({
-                            "proposal_open_contract": 1,
-                            "contract_id": contract_id
-                        }))
-                        result = json.loads(self.ws.recv())
-                        if "proposal_open_contract" in result:
-                            contract = result["proposal_open_contract"]
-                            profit = float(contract.get("profit", 0))
-                            print(f"🏁 RESULTADO OBTENIDO! Profit = {profit}", file=sys.stderr)
-                            break
-                    except:
-                        print("❌ NO SE PUDO OBTENER RESULTADO FINAL", file=sys.stderr)
-                        profit = -1
-                    break
-
+            # ==================================
+            # RECORRER TODOS LOS PARES CON LA MISMA CONEXIÓN
+            # ==================================
+            for par in pares:
                 try:
-                    result = json.loads(self.ws.recv())
-                    if "proposal_open_contract" in result:
-                        contract = result["proposal_open_contract"]
-                        if contract.get("is_sold", False):
-                            profit = float(contract.get("profit", 0))
-                            print(f"🏁 RESULTADO LISTO! Profit = {profit}", file=sys.stderr)
-                            break
-                except Exception as e:
-                    print(f"🔄 RECONECTANDO... {str(e)}", file=sys.stderr)
-                    self.autorizado = False
-                    time.sleep(3)
-                    
-                time.sleep(2)
+                    print(f"\n📊 ANALIZANDO {par}...")
 
-            return profit
+                    # VELAS
+                    velas = bot.get_candles(par)
+                    print(f"📈 Velas recibidas: {len(velas)}")
+
+                    if len(velas) < 30:
+                        print("⚠️ Pocos datos, saltando...")
+                        time.sleep(3)
+                        continue
+
+                    # ANÁLISIS
+                    score, tipo, datos_ia = analizar_mercado(par, velas)
+                    confianza = calcular_confianza(score)
+                    decision = decision_final(tipo, score, confianza)
+
+                    print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
+
+                    if not decision:
+                        print("⏭️  SIN SEÑAL SUFICIENTE")
+                        time.sleep(3)
+                        continue
+
+                    # ==================================
+                    # 💸 EJECUTAR
+                    # ==================================
+                    monto_actual = MONTO * martingala
+                    enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Confianza: {confianza}% | Monto: {monto_actual}")
+
+                    contract_id = bot.comprar(par, decision, monto_actual)
+                    print(f"📥 contract_id = {contract_id}")
+
+                    if contract_id:
+                        print(f"✅ ORDEN ENVIADA! ID: {contract_id}")
+                        
+                        profit = bot.check_result(contract_id)
+                        print(f"🏁 RESULTADO: Profit = {profit}")
+                        
+                        # 🧠 APRENDER
+                        datos_ia["par"] = par
+                        aprender_resultado(profit, datos_ia)
+
+                        if profit > 0:
+                            enviar_telegram(f"✅ GANADA | +{profit} USD 🧠")
+                            martingala = 1
+                            racha_perdidas = 0
+                        else:
+                            enviar_telegram(f"❌ PERDIDA | {profit} USD 🧠")
+                            racha_perdidas += 1
+                            perdidas_dia += profit
+                            
+                            if racha_perdidas >= 2:
+                                martingala = 1
+                            else:
+                                martingala *= 1.3
+
+                        if perdidas_dia <= LIMITE_PERDIDA:
+                            enviar_telegram("🛑 LÍMITE DE PÉRDIDA ALCANZADO")
+                            bot.cerrar()
+                            return
+
+                    else:
+                        print("❌ FALLO: contract_id es None")
+                        enviar_telegram(f"⚠️ FALLO EJECUCIÓN EN {par}")
+                        time.sleep(10)
+
+                except Exception as e:
+                    print(f"💥 ERROR EN {par}: {e}")
+                    time.sleep(10)
+
+            # ==================================
+            # FIN DEL CICLO
+            # ==================================
+            print("\n✅ Ciclo terminado. Cerrando conexión...")
+            bot.cerrar()
+            print("⏳ Esperando 60s para nuevo ciclo...")
+            time.sleep(60)
 
         except Exception as e:
-            print(f"❌ ERROR RESULTADO: {str(e)}", file=sys.stderr)
-            return -1
+            print(f"💥 ERROR GLOBAL: {e}")
+            if bot:
+                bot.cerrar()
+            time.sleep(30)
+
+# =========================
+# INICIAR
+# =========================
+if __name__ == "__main__":
+    ejecutar_bot()
