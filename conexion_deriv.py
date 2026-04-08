@@ -15,7 +15,7 @@ class DerivBot:
             print("🔌 INTENTANDO CONECTAR...", file=sys.stderr)
             self.ws = websocket.create_connection(
                 "wss://ws.derivws.com/websockets/v3?app_id=1089",
-                timeout=10  # ⏱️ TIMEOUT CORTO PARA NO CONGELARSE
+                timeout=15
             )
             print("📤 ENVIANDO TOKEN...", file=sys.stderr)
             self.ws.send(json.dumps({"authorize": self.token}))
@@ -58,7 +58,7 @@ class DerivBot:
             print(f"❌ ERROR VELAS: {str(e)}", file=sys.stderr)
             return []
 
-    def comprar(self, par, tipo, monto=1):
+    def comprar(self, par, tipo, monto=0.35):
         try:
             accion = "CALL" if tipo.lower() == "call" else "PUT"
             print(f"📤 ENVIANDO ORDEN: {par} | {accion} | ${monto}", file=sys.stderr)
@@ -101,17 +101,34 @@ class DerivBot:
 
     def check_result(self, contract_id):
         try:
+            print("⌛ ESPERANDO RESULTADO (MAX 70 SEG)...", file=sys.stderr)
+            start_time = time.time()
+            
             self.ws.send(json.dumps({
                 "proposal_open_contract": 1,
                 "contract_id": contract_id
             }))
+
             while True:
-                result = json.loads(self.ws.recv())
-                if "proposal_open_contract" in result:
-                    contract = result["proposal_open_contract"]
-                    if contract.get("is_sold", False):
-                        return float(contract.get("profit", 0))
-                time.sleep(1)
+                # ⏱️ TIMEOUT DE SEGURIDAD
+                if time.time() - start_time > 70:
+                    print("⏰ TIMEOUT - CERRANDO CONEXIÓN", file=sys.stderr)
+                    return 0
+
+                try:
+                    result = json.loads(self.ws.recv())
+                    if "proposal_open_contract" in result:
+                        contract = result["proposal_open_contract"]
+                        if contract.get("is_sold", False):
+                            profit = float(contract.get("profit", 0))
+                            print(f"🏁 RESULTADO LISTO! Profit = {profit}", file=sys.stderr)
+                            return profit
+                except Exception as e:
+                    print(f"🔄 RECONECTANDO... {str(e)}", file=sys.stderr)
+                    time.sleep(2)
+                    
+                time.sleep(2)
+
         except Exception as e:
             print(f"❌ ERROR RESULTADO: {str(e)}", file=sys.stderr)
             return 0
