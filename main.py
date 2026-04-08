@@ -25,7 +25,7 @@ def enviar_telegram(msg):
 # PARÁMETROS
 # =========================
 pares = ["R_10", "R_25", "R_50"]
-MONTO = 0.10           
+MONTO = 0.35         
 LIMITE_PERDIDA = -50   
 
 martingala = 1
