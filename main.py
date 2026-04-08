@@ -38,60 +38,58 @@ perdidas_dia = 0
 def ejecutar_bot():
     global martingala, racha_perdidas, perdidas_dia
 
-    print("🚀 BOT INICIADO - MODO INTELIGENTE PRO 🧠")
-    enviar_telegram("🤖 BOT IA PRO - ACTIVADO | MULTI-INDICADORES 📊")
+    print("🚀 BOT INICIADO - MODO ULTRA RÁPIDO 🚀")
+    enviar_telegram("🤖 BOT IA PRO - ACTIVADO | MODO FÁCIL 📊")
 
     while True:
+        bot = None
         try:
             print("\n" + "="*60)
-            print("🔄 NUEVO CICLO DE ANÁLISIS")
+            print("🔄 NUEVO CICLO - CONECTANDO...")
             print("="*60)
 
+            # 💡 CONECTAR
+            bot = DerivBot()
+            conectado = bot.conectar()
+            if not conectado:
+                print("❌ FALLO CONEXIÓN - ESPERANDO 60 SEG...")
+                time.sleep(60)
+                continue
+
+            # ==================================
+            # RECORRER PARES
+            # ==================================
             for par in pares:
-                print(f"\n📊 ANALIZANDO {par}...")
-                contract_id = None
-
-                bot = DerivBot()
-                
-                # CONECTAR
-                conectado = bot.conectar()
-                if not conectado:
-                    print("❌ FALLO CONEXIÓN")
-                    time.sleep(5)
-                    continue
-
-                # VELAS
-                print(f"📥 PIDIENDO VELAS PARA {par}...")
-                velas = bot.get_candles(par)
-                print(f"📈 Velas recibidas: {len(velas)}")
-
-                if len(velas) < 30:
-                    print(f"⚠️ Pocos datos ({len(velas)}), saltando...")
-                    bot.cerrar()
-                    time.sleep(3)
-                    continue
-
-                # ANÁLISIS COMPLETO
-                print("🧠 EJECUTANDO INTELIGENCIA ARTIFICIAL...")
-                score, tipo, datos_ia = analizar_mercado(par, velas)
-                confianza = calcular_confianza(score)
-                decision = decision_final(tipo, score, confianza)
-
-                print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
-
-                if not decision:
-                    print("⏭️  SIN SEÑAL SUFICIENTE - SIGUIENTE...")
-                    bot.cerrar()
-                    time.sleep(3)
-                    continue
-
-                # ==================================
-                # 💸 EJECUCIÓN
-                # ==================================
-                monto_actual = MONTO * martingala
-                enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Confianza: {confianza}% | Monto: {monto_actual}")
-
                 try:
+                    print(f"\n📊 ANALIZANDO {par}...")
+
+                    # VELAS
+                    velas = bot.get_candles(par)
+                    print(f"📈 Velas recibidas: {len(velas)}")
+
+                    if len(velas) < 10:
+                        print("⚠️ Pocos datos, saltando...")
+                        time.sleep(3)
+                        continue
+
+                    # ANÁLISIS
+                    score, tipo, datos_ia = analizar_mercado(par, velas)
+                    confianza = calcular_confianza(score)
+                    decision = decision_final(tipo, score, confianza)
+
+                    print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
+
+                    if not decision:
+                        print("⏭️  SIN SEÑAL")
+                        time.sleep(3)
+                        continue
+
+                    # ==================================
+                    # 💸 EJECUTAR
+                    # ==================================
+                    monto_actual = MONTO * martingala
+                    enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Monto: {monto_actual}")
+
                     contract_id = bot.comprar(par, decision, monto_actual)
                     print(f"📥 contract_id = {contract_id}")
 
@@ -101,11 +99,7 @@ def ejecutar_bot():
                         profit = bot.check_result(contract_id)
                         print(f"🏁 RESULTADO: Profit = {profit}")
                         
-                        bot.cerrar()
-
-                        # ==================================
-                        # 🧠 LA IA APRENDE
-                        # ==================================
+                        # 🧠 APRENDER
                         datos_ia["par"] = par
                         aprender_resultado(profit, datos_ia)
 
@@ -118,37 +112,41 @@ def ejecutar_bot():
                             racha_perdidas += 1
                             perdidas_dia += profit
                             
-                            # LÓGICA MARTINGALA
                             if racha_perdidas >= 2:
-                                martingala = 1  # Resetear si van 2 seguidas
+                                martingala = 1
                             else:
-                                martingala *= 1.3  # Aumentar suavemente
+                                martingala *= 1.3
 
-                        # LÍMITE DE PÉRDIDA DIARIA
                         if perdidas_dia <= LIMITE_PERDIDA:
-                            enviar_telegram("🛑 LÍMITE DE PÉRDIDA ALCANZADO | DETENIENDO BOT")
+                            enviar_telegram("🛑 LÍMITE DE PÉRDIDA ALCANZADO")
+                            bot.cerrar()
                             return
 
                     else:
                         print("❌ FALLO: contract_id es None")
                         enviar_telegram(f"⚠️ FALLO EJECUCIÓN EN {par}")
-                        bot.cerrar()
                         time.sleep(10)
 
                 except Exception as e:
-                    print(f"💥 ERROR EJECUCIÓN: {e}")
-                    enviar_telegram(f"💥 EXCEPCIÓN: {e}")
-                    bot.cerrar()
+                    print(f"💥 ERROR EN {par}: {e}")
+                    # Si hay error, esperar un poco
                     time.sleep(10)
 
-                time.sleep(5)
-
-            print("\n✅ Ciclo terminado. Esperando 60s...")
+            # ==================================
+            # FIN CICLO
+            # ==================================
+            print("\n✅ Ciclo terminado. Cerrando conexión...")
+            bot.cerrar()
+            print("⏳ ESPERANDO 60 SEGUNDOS ANTES DE VOLVER A EMPEZAR...")
             time.sleep(60)
 
         except Exception as e:
             print(f"💥 ERROR GLOBAL: {e}")
-            time.sleep(30)
+            if bot:
+                bot.cerrar()
+            # 💡 SI HAY ERROR DE CONEXIÓN O LÍMITE, ESPERAR 60 SEG
+            print("⏳ ESPERANDO 60 SEGUNDOS POR LÍMITE...")
+            time.sleep(60)
 
 # =========================
 # INICIAR
