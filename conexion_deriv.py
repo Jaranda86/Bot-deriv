@@ -20,7 +20,7 @@ class DerivBot:
             print("🔌 INTENTANDO CONECTAR...", file=sys.stderr)
             self.ws = websocket.create_connection(
                 "wss://ws.derivws.com/websockets/v3?app_id=1089",
-                timeout=20
+                timeout=30
             )
             
             print("📤 ENVIANDO TOKEN...", file=sys.stderr)
@@ -43,9 +43,8 @@ class DerivBot:
         except Exception as e:
             print(f"💥 ERROR CONEXIÓN: {str(e)}", file=sys.stderr)
             self.autorizado = False
-            # Esperar un poco antes de volver a intentar
-            print("⏳ ESPERANDO 10 SEG...", file=sys.stderr)
-            time.sleep(10)
+            print("⏳ ESPERANDO 15 SEGUNDOS ANTES DE VOLVER A INTENTAR...", file=sys.stderr)
+            time.sleep(15)
             return False
 
     def cerrar(self):
@@ -121,19 +120,31 @@ class DerivBot:
 
     def check_result(self, contract_id):
         try:
-            print("⌛ ESPERANDO RESULTADO (MAX 70 SEG)...", file=sys.stderr)
+            print("⌛ ESPERANDO RESULTADO (MAX 80 SEGUNDOS)...", file=sys.stderr)
             start_time = time.time()
-            
-            self.ws.send(json.dumps({
-                "proposal_open_contract": 1,
-                "contract_id": contract_id
-            }))
+            profit = 0
+            intentos = 0
 
             while True:
-                if time.time() - start_time > 70:
-                    print("⏰ TIMEOUT - CERRANDO CONEXIÓN", file=sys.stderr)
-                    self.cerrar()
-                    return 0
+                # ⏱️ TIMEOUT DE SEGURIDAD
+                if time.time() - start_time > 80:
+                    print("⏰ TIMEOUT ALCANZADO - INTENTANDO OBTENER RESULTADO...", file=sys.stderr)
+                    # Intentar una última vez pedir el contrato
+                    try:
+                        self.ws.send(json.dumps({
+                            "proposal_open_contract": 1,
+                            "contract_id": contract_id
+                        }))
+                        result = json.loads(self.ws.recv())
+                        if "proposal_open_contract" in result:
+                            contract = result["proposal_open_contract"]
+                            profit = float(contract.get("profit", 0))
+                            print(f"🏁 RESULTADO OBTENIDO! Profit = {profit}", file=sys.stderr)
+                            break
+                    except:
+                        print("❌ NO SE PUDO OBTENER RESULTADO FINAL", file=sys.stderr)
+                        profit = -1  # Marcar como error
+                    break
 
                 try:
                     result = json.loads(self.ws.recv())
@@ -142,15 +153,23 @@ class DerivBot:
                         if contract.get("is_sold", False):
                             profit = float(contract.get("profit", 0))
                             print(f"🏁 RESULTADO LISTO! Profit = {profit}", file=sys.stderr)
-                            return profit
+                            break
                 except Exception as e:
-                    print(f"🔄 RECONECTANDO... {str(e)}", file=sys.stderr)
-                    self.autorizado = False
-                    time.sleep(2)
+                    print(f"🔄 RECONECTANDO... Intento {intentos}", file=sys.stderr)
+                    intentos += 1
+                    time.sleep(3)
+                    # Si falla mucho, reconectar
+                    if intentos > 3:
+                        print("🔌 RECONECTANDO SOCKET...", file=sys.stderr)
+                        self.cerrar()
+                        time.sleep(2)
+                        self.conectar()
+                        intentos = 0
                     
                 time.sleep(2)
 
+            return profit
+
         except Exception as e:
             print(f"❌ ERROR RESULTADO: {str(e)}", file=sys.stderr)
-            self.autorizado = False
-            return 0
+            return -1
