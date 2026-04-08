@@ -61,15 +61,18 @@ def ejecutar_bot():
                     continue
 
                 # VELAS
+                print(f"📥 PIDIENDO VELAS PARA {par}...")
                 velas = bot.get_candles(par)
                 print(f"📈 Velas recibidas: {len(velas)}")
 
                 if len(velas) < 30:
-                    print("⚠️ Pocos datos, saltando...")
+                    print(f"⚠️ Pocos datos ({len(velas)}), saltando...")
                     bot.cerrar()
+                    time.sleep(3)
                     continue
 
                 # ANÁLISIS COMPLETO
+                print("🧠 EJECUTANDO INTELIGENCIA ARTIFICIAL...")
                 score, tipo, datos_ia = analizar_mercado(par, velas)
                 confianza = calcular_confianza(score)
                 decision = decision_final(tipo, score, confianza)
@@ -77,7 +80,7 @@ def ejecutar_bot():
                 print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
 
                 if not decision:
-                    print("⏭️  SIN SEÑAL SUFICIENTE")
+                    print("⏭️  SIN SEÑAL SUFICIENTE - SIGUIENTE...")
                     bot.cerrar()
                     time.sleep(3)
                     continue
