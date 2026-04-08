@@ -13,7 +13,7 @@ def cargar_memoria():
     if os.path.exists(ARCHIVO_MEMORIA):
         with open(ARCHIVO_MEMORIA, 'r') as f:
             return json.load(f)
-    return {"stats": {"ganadas": 0, "perdidas": 0}, "config": {"rsi_min_compra": 35, "rsi_max_venta": 65, "fuerza_minima": 20}}
+    return {"stats": {"ganadas": 0, "perdidas": 0}, "config": {"rsi_min_compra": 30, "rsi_max_venta": 70, "fuerza_minima": 15}}
 
 def guardar_memoria(datos):
     with open(ARCHIVO_MEMORIA, 'w') as f:
@@ -94,7 +94,7 @@ def calcular_stochastic(precios, alto, bajo, periodo=14):
 
 def calcular_adx(precios, alto, bajo, periodo=14):
     if len(precios) < periodo + 1:
-        return 20
+        return 15
     tr = []
     plus_dm = []
     minus_dm = []
@@ -143,7 +143,7 @@ def analizar_mercado(par, velas):
     # ==================================
     # 1. TENDENCIA Y FUERZA (ADX)
     # ==================================
-    # 🔽 BAJÉ EL LÍMITE DE 25 A 20 PARA QUE ENTRE MÁS
+    # 🔽 MUY BAJO: 15
     if adx > config["fuerza_minima"]:
         score += 1
         if precio > ema9 and ema9 > ema21:
@@ -159,11 +159,22 @@ def analizar_mercado(par, velas):
             score += 1
             tipo = "put"
         else:
-            print(f"📉 Tendencia neutra")
-            return 0, None, {}
+            # 🔽 SI ESTÁ LADO, ELEGIR POR MEDIAS
+            if precio > ema21:
+                tipo = "call"
+                score +=1
+            else:
+                tipo = "put"
+                score +=1
     else:
-        print(f"📉 ADX bajo ({round(adx,1)}) - Sin tendencia clara")
-        return 0, None, {}
+        # 🔽 SI ADX ES BAJO, IGUAL ENTRAR
+        print(f"📉 ADX bajo ({round(adx,1)}) - IGUAL OPERAMOS")
+        if precio > ema21:
+            tipo = "call"
+            score +=1
+        else:
+            tipo = "put"
+            score +=1
 
     # ==================================
     # 2. RSI
@@ -190,9 +201,9 @@ def analizar_mercado(par, velas):
     # ==================================
     # 5. STOCHASTIC
     # ==================================
-    if tipo == "call" and stoch < 50:  # 🔽 ANTES ERA 40, AHORA 50
+    if tipo == "call" and stoch < 60:  # 🔽 ANTES 40
         score +=1
-    elif tipo == "put" and stoch > 50: # 🔽 ANTES ERA 60, AHORA 50
+    elif tipo == "put" and stoch > 40: # 🔽 ANTES 60
         score +=1
 
     datos_analisis = {
@@ -212,17 +223,17 @@ def analizar_mercado(par, velas):
 # CONFIANZA Y DECISIÓN
 # =========================
 def calcular_confianza(score):
-    if score >= 6:
+    if score >= 5:
         return 90
-    elif score >= 4:
+    elif score >= 3:
         return 80
-    elif score >= 3:  # 🔽 ANTES ERA 4, AHORA 3
+    elif score >= 2:  # 🔽 CON 2 PUNTOS BASTA
         return 70
     else:
-        return 0
+        return 65  # 🔽 MÍNIMO 65%
 
 def decision_final(tipo, score, confianza):
-    if score >= 3 and confianza >= 70:  # 🔽 BAJÉ LA EXIGENCIA
+    if score >= 2 and confianza >= 65:  # 🔽 MUY FÁCIL
         return tipo
     return None
 
