@@ -13,7 +13,7 @@ def cargar_memoria():
     if os.path.exists(ARCHIVO_MEMORIA):
         with open(ARCHIVO_MEMORIA, 'r') as f:
             return json.load(f)
-    return {"stats": {"ganadas": 0, "perdidas": 0}, "config": {"rsi_min_compra": 40, "rsi_max_venta": 60, "fuerza_minima": 25}}
+    return {"stats": {"ganadas": 0, "perdidas": 0}, "config": {"rsi_min_compra": 35, "rsi_max_venta": 65, "fuerza_minima": 20}}
 
 def guardar_memoria(datos):
     with open(ARCHIVO_MEMORIA, 'w') as f:
@@ -35,7 +35,6 @@ def guardar_historial(par, tipo, profit, score):
         }
         historial.append(nueva)
         
-        # Guardar solo últimas 1000 operaciones
         if len(historial) > 1000:
             historial = historial[-1000:]
             
@@ -144,7 +143,8 @@ def analizar_mercado(par, velas):
     # ==================================
     # 1. TENDENCIA Y FUERZA (ADX)
     # ==================================
-    if adx > 25:  # Solo entrar si hay tendencia fuerte
+    # 🔽 BAJÉ EL LÍMITE DE 25 A 20 PARA QUE ENTRE MÁS
+    if adx > config["fuerza_minima"]:
         score += 1
         if precio > ema9 and ema9 > ema21:
             score += 2
@@ -159,6 +159,7 @@ def analizar_mercado(par, velas):
             score += 1
             tipo = "put"
         else:
+            print(f"📉 Tendencia neutra")
             return 0, None, {}
     else:
         print(f"📉 ADX bajo ({round(adx,1)}) - Sin tendencia clara")
@@ -189,9 +190,9 @@ def analizar_mercado(par, velas):
     # ==================================
     # 5. STOCHASTIC
     # ==================================
-    if tipo == "call" and stoch < 40:
+    if tipo == "call" and stoch < 50:  # 🔽 ANTES ERA 40, AHORA 50
         score +=1
-    elif tipo == "put" and stoch > 60:
+    elif tipo == "put" and stoch > 50: # 🔽 ANTES ERA 60, AHORA 50
         score +=1
 
     datos_analisis = {
@@ -203,7 +204,7 @@ def analizar_mercado(par, velas):
         "score": score
     }
     
-    print(f"📊 INDICADORES: RSI={datos_analisis['rsi']} | ADX={datos_analisis['adx']} | STOCH={datos_analisis['stoch']}")
+    print(f"📊 INDICADORES: RSI={datos_analisis['rsi']} | ADX={datos_analisis['adx']} | STOCH={datos_analisis['stoch']} | SCORE={score}")
 
     return score, tipo, datos_analisis
 
@@ -211,17 +212,17 @@ def analizar_mercado(par, velas):
 # CONFIANZA Y DECISIÓN
 # =========================
 def calcular_confianza(score):
-    if score >= 7:
-        return 95
-    elif score >= 5:
-        return 85
+    if score >= 6:
+        return 90
     elif score >= 4:
-        return 75
+        return 80
+    elif score >= 3:  # 🔽 ANTES ERA 4, AHORA 3
+        return 70
     else:
         return 0
 
 def decision_final(tipo, score, confianza):
-    if score >= 4 and confianza >= 75:
+    if score >= 3 and confianza >= 70:  # 🔽 BAJÉ LA EXIGENCIA
         return tipo
     return None
 
@@ -238,10 +239,9 @@ def aprender_resultado(profit, analisis):
         memoria["stats"]["perdidas"] += 1
         print(f"🧠 ❌ APRENDIZAJE: Ajustando... | Score: {analisis['score']}")
         
-        # Ajustar parámetros según resultado
         if analisis['tipo'] == "call":
-            memoria["config"]["rsi_min_compra"] = max(30, memoria["config"]["rsi_min_compra"] - 2)
+            memoria["config"]["rsi_min_compra"] = max(30, memoria["config"]["rsi_min_compra"] - 1)
         else:
-            memoria["config"]["rsi_max_venta"] = min(70, memoria["config"]["rsi_max_venta"] + 2)
+            memoria["config"]["rsi_max_venta"] = min(70, memoria["config"]["rsi_max_venta"] + 1)
             
     guardar_memoria(memoria)
