@@ -32,7 +32,7 @@ class DerivBot:
             if "error" in response:
                 print(f"❌ ERROR: {response['error']['message']}", file=sys.stderr)
                 if "rate limit" in response['error']['message']:
-                    print("⏳ ESPERANDO 60 SEG POR LÍMITE...", file=sys.stderr)
+                    print("⏳ ESPERANDO 60 SEGUNDOS POR LÍMITE...", file=sys.stderr)
                     time.sleep(60)
                 return False
                 
@@ -43,7 +43,7 @@ class DerivBot:
         except Exception as e:
             print(f"💥 ERROR CONEXIÓN: {str(e)}", file=sys.stderr)
             self.autorizado = False
-            print("⏳ ESPERANDO 15 SEGUNDOS ANTES DE VOLVER A INTENTAR...", file=sys.stderr)
+            print("⏳ ESPERANDO 15 SEGUNDOS...", file=sys.stderr)
             time.sleep(15)
             return False
 
@@ -123,13 +123,10 @@ class DerivBot:
             print("⌛ ESPERANDO RESULTADO (MAX 80 SEGUNDOS)...", file=sys.stderr)
             start_time = time.time()
             profit = 0
-            intentos = 0
 
             while True:
-                # ⏱️ TIMEOUT DE SEGURIDAD
                 if time.time() - start_time > 80:
                     print("⏰ TIMEOUT ALCANZADO - INTENTANDO OBTENER RESULTADO...", file=sys.stderr)
-                    # Intentar una última vez pedir el contrato
                     try:
                         self.ws.send(json.dumps({
                             "proposal_open_contract": 1,
@@ -143,7 +140,7 @@ class DerivBot:
                             break
                     except:
                         print("❌ NO SE PUDO OBTENER RESULTADO FINAL", file=sys.stderr)
-                        profit = -1  # Marcar como error
+                        profit = -1
                     break
 
                 try:
@@ -155,16 +152,9 @@ class DerivBot:
                             print(f"🏁 RESULTADO LISTO! Profit = {profit}", file=sys.stderr)
                             break
                 except Exception as e:
-                    print(f"🔄 RECONECTANDO... Intento {intentos}", file=sys.stderr)
-                    intentos += 1
+                    print(f"🔄 RECONECTANDO... {str(e)}", file=sys.stderr)
+                    self.autorizado = False
                     time.sleep(3)
-                    # Si falla mucho, reconectar
-                    if intentos > 3:
-                        print("🔌 RECONECTANDO SOCKET...", file=sys.stderr)
-                        self.cerrar()
-                        time.sleep(2)
-                        self.conectar()
-                        intentos = 0
                     
                 time.sleep(2)
 
