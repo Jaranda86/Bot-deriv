@@ -9,14 +9,21 @@ class DerivBot:
     def __init__(self):
         self.token = os.getenv("DERIV_TOKEN")
         self.ws = None
+        self.autorizado = False  # Bandera para no autorizar mil veces
 
     def conectar(self):
         try:
+            # Si ya está conectado, no hacer nada
+            if self.ws and self.autorizado:
+                print("✅ Ya conectado y autorizado", file=sys.stderr)
+                return True
+
             print("🔌 INTENTANDO CONECTAR...", file=sys.stderr)
             self.ws = websocket.create_connection(
                 "wss://ws.derivws.com/websockets/v3?app_id=1089",
                 timeout=15
             )
+            
             print("📤 ENVIANDO TOKEN...", file=sys.stderr)
             self.ws.send(json.dumps({"authorize": self.token}))
             response = json.loads(self.ws.recv())
@@ -25,19 +32,26 @@ class DerivBot:
 
             if "error" in response:
                 print(f"❌ ERROR: {response['error']['message']}", file=sys.stderr)
+                # Si es límite de peticiones, esperar un poco
+                if "rate limit" in response['error']['message']:
+                    print("⏳ ESPERANDO 60 SEG POR LÍMITE...", file=sys.stderr)
+                    time.sleep(60)
                 return False
                 
             print("✅ CONECTADO Y AUTORIZADO!", file=sys.stderr)
+            self.autorizado = True
             return True
             
         except Exception as e:
             print(f"💥 ERROR CONEXIÓN: {str(e)}", file=sys.stderr)
+            self.autorizado = False
             return False
 
     def cerrar(self):
         try:
             if self.ws:
                 self.ws.close()
+                self.autorizado = False
         except:
             pass
 
@@ -56,6 +70,7 @@ class DerivBot:
             return response.get("candles", [])
         except Exception as e:
             print(f"❌ ERROR VELAS: {str(e)}", file=sys.stderr)
+            self.autorizado = False
             return []
 
     def comprar(self, par, tipo, monto=0.35):
@@ -87,6 +102,10 @@ class DerivBot:
 
             if "error" in result:
                 print(f"💥 ERROR DERIV: {result['error']['message']}", file=sys.stderr)
+                # Si es límite de peticiones, esperar
+                if "rate limit" in result['error']['message']:
+                    print("⏳ ESPERANDO 60 SEG...", file=sys.stderr)
+                    time.sleep(60)
                 return None
                 
             if "buy" in result:
@@ -97,6 +116,7 @@ class DerivBot:
 
         except Exception as e:
             print(f"💥 ERROR EN COMPRAR: {str(e)}", file=sys.stderr)
+            self.autorizado = False
             return None
 
     def check_result(self, contract_id):
@@ -113,6 +133,7 @@ class DerivBot:
                 # ⏱️ TIMEOUT DE SEGURIDAD
                 if time.time() - start_time > 70:
                     print("⏰ TIMEOUT - CERRANDO CONEXIÓN", file=sys.stderr)
+                    self.autorizado = False
                     return 0
 
                 try:
@@ -125,10 +146,12 @@ class DerivBot:
                             return profit
                 except Exception as e:
                     print(f"🔄 RECONECTANDO... {str(e)}", file=sys.stderr)
+                    self.autorizado = False
                     time.sleep(2)
                     
                 time.sleep(2)
 
         except Exception as e:
             print(f"❌ ERROR RESULTADO: {str(e)}", file=sys.stderr)
+            self.autorizado = False
             return 0
