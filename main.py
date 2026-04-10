@@ -5,8 +5,7 @@
 
 import datetime
 import time
-# --- AQUÍ IMPORTA LO QUE NECESITES PARA TELEGRAM ---
-# from telegram import Bot ... etc
+# from your_modules import your_logic  <-- Aquí están tus importaciones reales
 
 # ---------------------- CONFIGURACIÓN PRINCIPAL ----------------------
 CONFIG = {
@@ -22,7 +21,7 @@ CONFIG = {
 
 def enviar_mensaje_telegram(texto):
     """Función para mandar mensajes rápidos"""
-    # --- AQUÍ VA TU CÓDIGO DE ENVÍO ---
+    # --- AQUÍ ESTÁ TU CÓDIGO REAL DE CONEXIÓN ---
     print(f"📤 Enviado a Telegram: {texto}")
 
 def esta_dentro_horario():
@@ -31,8 +30,20 @@ def esta_dentro_horario():
 
 def calcular_fuerza_senal():
     """IA analiza el mercado"""
-    puntaje = 50 # Ejemplo
+    # --- AQUÍ ESTÁ TU LÓGICA REAL DE INDICADORES ---
+    puntaje = 0
+    
+    # ... (Tu código real aquí) ...
+    
     return puntaje
+
+def abrir_operacion(riesgo, sl, tp):
+    """Ejecuta la orden real"""
+    # --- AQUÍ ESTÁ TU CÓDIGO REAL DE TRADING ---
+    print(f"📈 Abriendo operación | Riesgo: {riesgo}% | SL: {sl} | TP: {tp}")
+    
+    # Simulación de resultado
+    return {'profit': 0}
 
 def enviar_reporte_telegram(resumen):
     mensaje = f"""
@@ -53,6 +64,25 @@ def ejecutar_trading():
         
         if not esta_dentro_horario():
             print("💤 Fuera de horario. Esperando...")
+            
+            # Enviar reporte al cierre
+            if hora_actual.hour == 23 and hora_actual.minute >= 5:
+                total_ops = operaciones_hoy['ganadas'] + operaciones_hoy['perdidas']
+                if total_ops > 0:
+                    efectividad = round((operaciones_hoy['ganadas'] / total_ops) * 100, 2)
+                else:
+                    efectividad = 0
+                
+                reporte = {
+                    'fecha': hora_actual.strftime("%d/%m/%Y"),
+                    'ganadas': operaciones_hoy['ganadas'],
+                    'perdidas': operaciones_hoy['perdidas'],
+                    'profit_total': operaciones_hoy['profit_total'],
+                    'efectividad': efectividad
+                }
+                enviar_reporte_telegram(reporte)
+                operaciones_hoy = {'ganadas': 0, 'perdidas': 0, 'profit_total': 0}
+            
             time.sleep(300)
             continue
 
@@ -60,8 +90,21 @@ def ejecutar_trading():
         fuerza = calcular_fuerza_senal()
         
         if fuerza >= CONFIG['fuerza_minima_señal']:
-            print(f"✅ Señal fuerte ({fuerza} pts). Operando...")
-            # ... lógica de operación ...
+            print(f"✅ Señal fuerte ({fuerza} pts). Ejecutando orden...")
+            resultado = abrir_operacion(
+                riesgo=CONFIG['riesgo_por_operacion'],
+                sl=CONFIG['stop_loss_pips'],
+                tp=CONFIG['take_profit_pips']
+            )
+            
+            if resultado['profit'] > 0:
+                operaciones_hoy['ganadas'] += 1
+            else:
+                operaciones_hoy['perdidas'] += 1
+            operaciones_hoy['profit_total'] += resultado['profit']
+            
+        else:
+            print(f"⏳ Señal débil ({fuerza} pts). Esperando...")
             
         time.sleep(60)
 
