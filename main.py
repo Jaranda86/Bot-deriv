@@ -85,7 +85,7 @@ def ejecutar_trading():
 
         # 2. ANALISIS DE MERCADO (MODO SEGURIDAD)
         print("🔍 Analizando mercado...")
-        fuerza = calcular_fuerza_senal() # <-- AQUÍ LO ARREGLÉ
+        fuerza = calcular_fuerza_senal() # <-- CORREGIDO: SIN PARÁMETROS
         
         if fuerza >= CONFIG['fuerza_minima_señal']:
             print(f"✅ Señal fuerte encontrada ({fuerza} pts). Ejecutando orden...")
