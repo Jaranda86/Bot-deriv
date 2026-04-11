@@ -8,8 +8,8 @@ from ia_pro_v1 import analizar_mercado, calcular_confianza, decision_final, apre
 # =========================
 # CONFIGURACIÓN TELEGRAM
 # =========================
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+TOKEN = os.getenv("8329264709:AAHyKe68ERfMr37EM8qn33KzMJuCuV6KeIM")
+CHAT_ID = os.getenv("6826449033")
 
 def enviar_telegram(msg):
     try:
@@ -33,11 +33,11 @@ def esta_dentro_horario():
     return HORA_INICIO <= hora_actual < HORA_FIN
 
 # =========================
-# PARÁMETROS MODO SEGURO
+# 🛡️ PARÁMETROS MODO ULTRA SEGURO
 # =========================
 pares = ["R_10", "R_25", "R_50"]
 MONTO_BASE = 0.35           
-LIMITE_PERDIDA = -30.00    # Bajé el límite para proteger
+LIMITE_PERDIDA = -15.00    # 🛡️ Límite más bajo: se detiene al perder $15
 
 martingala = 1
 racha_perdidas = 0
@@ -67,8 +67,8 @@ def enviar_reporte():
 def ejecutar_bot():
     global martingala, racha_perdidas, perdidas_dia, operaciones_hoy
 
-    print("🚀 BOT INICIADO - MODO SEGURIDAD ACTIVADO 🚀")
-    enviar_telegram("🤖 **BOT DOLA INICIADO** 🚀\n✅ Modo Seguridad Activado\n⏰ Horario: 06:00 AM a 20:00 PM")
+    print("🚀 BOT INICIADO - MODO ULTRA SEGURIDAD ACTIVADO 🚀")
+    enviar_telegram("🤖 **BOT DOLA INICIADO** 🚀\n✅ Modo Ultra Seguridad Activado\n⏰ Horario: 06:00 AM a 20:00 PM")
 
     while True:
         bot = None
@@ -124,17 +124,17 @@ def ejecutar_bot():
 
                     print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
 
-                    # 🛡️ MODO SEGURO: Solo entrar si confianza alta
-                    if not decision or confianza < 70:
-                        print("⏭️  SIN SEÑAL O POCA CONFIANZA")
+                    # 🛡️ MODO ULTRA SEGURO: Solo entrar si confianza MUY ALTA (mínimo 80%)
+                    if not decision or confianza < 80:
+                        print("⏭️  SIN SEÑAL O POCA CONFIANZA (necesita >=80%)")
                         time.sleep(3)
                         continue
 
                     # ==================================
-                    # 💸 CALCULAR MONTO CORRECTO
+                    # 💸 CALCULAR MONTO: SIN MARTINGALA
                     # ==================================
-                    monto_bruto = MONTO_BASE * martingala
-                    monto_final = round(monto_bruto, 2)  # ✅ REDONDEAR
+                    # 🛡️ El monto SIEMPRE es el mismo, no aumentamos aunque pierda
+                    monto_final = MONTO_BASE 
                     
                     enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Monto: {monto_final}")
 
@@ -153,7 +153,6 @@ def ejecutar_bot():
 
                         if profit > 0:
                             enviar_telegram(f"✅ GANADA | +{profit} USD 🧠")
-                            martingala = 1
                             racha_perdidas = 0
                             operaciones_hoy['ganadas'] += 1
                         else:
@@ -162,11 +161,8 @@ def ejecutar_bot():
                             perdidas_dia += profit
                             operaciones_hoy['perdidas'] += 1
                             
-                            # 🛡️ MARTINGALA MÁS SUAVE
-                            if racha_perdidas >= 2:
-                                martingala = 1
-                            else:
-                                martingala *= 1.2 # Bajé de 1.3 a 1.2
+                            # 🛡️ Ya NO aumentamos el monto al perder
+                            martingala = 1 
 
                         operaciones_hoy['total'] += profit
 
