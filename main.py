@@ -1,138 +1,207 @@
-# ============ BOT DOLA - VERSIÓN FINAL FUNCIONANDO ============
-# Horario: 06:00 AM - 20:00 PM (Hora Local Uruguay)
-# Configuración: Conservadora | Reportes ON | Sin Errores
-# ==============================================================
-
-import datetime
 import time
-import requests  # <-- IMPORTANTE: Para conectar
+import os
+import requests
+import datetime
+from conexion_deriv import DerivBot
+from ia_pro_v1 import analizar_mercado, calcular_confianza, decision_final, aprender_resultado
 
-# ---------------------- CONFIGURACIÓN PRINCIPAL ----------------------
-CONFIG = {
-    'horario_inicio': 9,    # 🕒 Hora Servidor ( = 6 AM tuyo)
-    'horario_fin': 23,      # 🕒 Hora Servidor ( = 8 PM tuyo)
-    'riesgo_por_operacion': 0.5,
-    'stop_loss_pips': 15,
-    'take_profit_pips': 30,
-    'fuerza_minima_señal': 70
-}
+# =========================
+# CONFIGURACIÓN TELEGRAM
+# =========================
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-# ---------------------- FUNCIONES REALES ----------------------
-
-# 📱 FUNCIÓN REAL DE TELEGRAM (Copia tus datos aquí)
-def enviar_mensaje_telegram(texto):
-    # --- RELLENA ESTOS DATOS CON LOS TUYOS ---
-    TELEGRAM_TOKEN = "8329264709:AAHyKe68ERfMr37EM8qn33KzMJuCuV6KeIM"
-    CHAT_ID = "6826449033"
-    # ------------------------------------------
-    
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    datos = {
-        'chat_id': CHAT_ID,
-        'text': texto,
-        'parse_mode': 'Markdown'
-    }
+def enviar_telegram(msg):
     try:
-        requests.post(url, data=datos)
-        print(f"📤 MENSAJE ENVIADO: {texto[:50]}...")
+        print("📤 ENVIANDO A TG:", msg)
+        if not TOKEN or not CHAT_ID:
+            print("❌ TELEGRAM NO CONFIGURADO")
+            return
+        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        requests.post(url, data={"chat_id": CHAT_ID, "text": msg}, timeout=10)
     except Exception as e:
-        print(f"⚠️ Error al enviar: {e}")
+        print("❌ ERROR TG:", e)
+
+# =========================
+# ⏰ CONFIGURACIÓN HORARIO
+# =========================
+HORA_INICIO = 9    # 9 AM servidor = 6 AM tuyo
+HORA_FIN = 23      # 11 PM servidor = 8 PM tuyo
 
 def esta_dentro_horario():
     hora_actual = datetime.datetime.now().hour
-    return CONFIG['horario_inicio'] <= hora_actual < CONFIG['horario_fin']
+    return HORA_INICIO <= hora_actual < HORA_FIN
 
-# 🧠 LÓGICA REAL DE LA IA
-def calcular_fuerza_senal():
-    """Aquí la IA analiza el mercado"""
-    
-def calcular_fuerza_senal():
-    """Aquí la IA analiza el mercado"""
-    # 🚀 FORZANDO SEÑAL FUERTE PARA PRUEBA
-    return 99
-    
+# =========================
+# PARÁMETROS MODO SEGURO
+# =========================
+pares = ["R_10", "R_25", "R_50"]
+MONTO_BASE = 0.35           
+LIMITE_PERDIDA = -30.00    # Bajé el límite para proteger
 
-# 📊 EJECUCIÓN REAL DE OPERACIONES
-def abrir_operacion(riesgo, sl, tp):
-    """Ejecuta la orden en Deriv"""
-    print(f"📈 ORDEN EJECUTADA | Riesgo: {riesgo}% | SL: {sl} | TP: {tp}")
-    
-    # Simulación de resultado (gana o pierde)
-    import random
-    ganancia = random.choice([-1.5, -1, 0.8, 1.2, 2.5])
-    return {'profit': ganancia}
+martingala = 1
+racha_perdidas = 0
+perdidas_dia = 0
+operaciones_hoy = {'ganadas': 0, 'perdidas': 0, 'total': 0.0}
 
-def enviar_reporte_telegram(resumen):
+# =========================
+# 📊 FUNCIÓN REPORTE DIARIO
+# =========================
+def enviar_reporte():
+    total_ops = operaciones_hoy['ganadas'] + operaciones_hoy['perdidas']
+    efectividad = round((operaciones_hoy['ganadas'] / total_ops) * 100, 2) if total_ops > 0 else 0
+    
     mensaje = f"""
 📊 **REPORTE DIARIO DE TRADING** 📊
-📅 Fecha: {resumen['fecha']}
-✅ Operaciones Ganadas: {resumen['ganadas']}
-❌ Operaciones Perdidas: {resumen['perdidas']}
-💰 Resultado Total: ${resumen['profit_total']:.2f}
-⚡ Efectividad: {resumen['efectividad']}%
+📅 Fecha: {datetime.datetime.now().strftime("%d/%m/%Y")}
+✅ Operaciones Ganadas: {operaciones_hoy['ganadas']}
+❌ Operaciones Perdidas: {operaciones_hoy['perdidas']}
+💰 Resultado Total: ${operaciones_hoy['total']:.2f}
+⚡ Efectividad: {efectividad}%
     """
-    enviar_mensaje_telegram(mensaje)
+    enviar_telegram(mensaje)
 
-def ejecutar_trading():
-    operaciones_hoy = {'ganadas': 0, 'perdidas': 0, 'profit_total': 0}
-    
+# =========================
+# BUCLE PRINCIPAL
+# =========================
+def ejecutar_bot():
+    global martingala, racha_perdidas, perdidas_dia, operaciones_hoy
+
+    print("🚀 BOT INICIADO - MODO SEGURIDAD ACTIVADO 🚀")
+    enviar_telegram("🤖 **BOT DOLA INICIADO** 🚀\n✅ Modo Seguridad Activado\n⏰ Horario: 06:00 AM a 20:00 PM")
+
     while True:
-        hora_actual = datetime.datetime.now()
+        bot = None
         
+        # VERIFICAR HORARIO
         if not esta_dentro_horario():
             print("💤 Fuera de horario. Esperando apertura...")
             
-            # Enviar reporte al finalizar el día
-            if hora_actual.hour == 23 and hora_actual.minute >= 5:
-                total_ops = operaciones_hoy['ganadas'] + operaciones_hoy['perdidas']
-                efectividad = round((operaciones_hoy['ganadas'] / total_ops) * 100, 2) if total_ops > 0 else 0
+            # Enviar reporte al cierre
+            hora_actual = datetime.datetime.now()
+            if hora_actual.hour == HORA_FIN and hora_actual.minute >= 5:
+                enviar_reporte()
+                # Reiniciar contadores
+                operaciones_hoy = {'ganadas': 0, 'perdidas': 0, 'total': 0.0}
+                perdidas_dia = 0
                 
-                reporte = {
-                    'fecha': hora_actual.strftime("%d/%m/%Y"),
-                    'ganadas': operaciones_hoy['ganadas'],
-                    'perdidas': operaciones_hoy['perdidas'],
-                    'profit_total': operaciones_hoy['profit_total'],
-                    'efectividad': efectividad
-                }
-                enviar_reporte_telegram(reporte)
-                operaciones_hoy = {'ganadas': 0, 'perdidas': 0, 'profit_total': 0}
-            
-            time.sleep(300) # Espera 5 min
+            time.sleep(300) # Esperar 5 min
             continue
 
-        print("\n🔍 Analizando mercado...")
-        fuerza = calcular_fuerza_senal()
-        
-        if fuerza >= CONFIG['fuerza_minima_señal']:
-            print(f"✅ SEÑAL FUERTE ENCONTRADA ({fuerza} pts)")
-            resultado = abrir_operacion(
-                riesgo=CONFIG['riesgo_por_operacion'],
-                sl=CONFIG['stop_loss_pips'],
-                tp=CONFIG['take_profit_pips']
-            )
-            
-            if resultado['profit'] > 0:
-                operaciones_hoy['ganadas'] += 1
-                print(f"💰 OPERACIÓN GANADA: +${resultado['profit']}")
-            else:
-                operaciones_hoy['perdidas'] += 1
-                print(f"📉 OPERACIÓN PERDIDA: ${resultado['profit']}")
-                
-            operaciones_hoy['profit_total'] += resultado['profit']
-            print(f"📊 Acumulado hoy: ${operaciones_hoy['profit_total']:.2f}")
-            
-        else:
-            print(f"⏳ Señal débil ({fuerza} pts). Esperando mejor oportunidad...")
-            
-        time.sleep(60) # Revisa cada minuto
+        try:
+            print("\n" + "="*60)
+            print("🔄 NUEVO CICLO - CONECTANDO...")
+            print("="*60)
 
-# ---------------------- INICIO DEL BOT ----------------------
+            # 💡 CONECTAR
+            bot = DerivBot()
+            conectado = bot.conectar()
+            if not conectado:
+                print("❌ FALLO CONEXIÓN - ESPERANDO 60 SEG...")
+                time.sleep(60)
+                continue
+
+            # ==================================
+            # RECORRER PARES
+            # ==================================
+            for par in pares:
+                try:
+                    print(f"\n📊 ANALIZANDO {par}...")
+
+                    # VELAS
+                    velas = bot.get_candles(par)
+                    print(f"📈 Velas recibidas: {len(velas)}")
+
+                    if len(velas) < 10:
+                        print("⚠️ Pocos datos, saltando...")
+                        time.sleep(3)
+                        continue
+
+                    # ANÁLISIS
+                    score, tipo, datos_ia = analizar_mercado(par, velas)
+                    confianza = calcular_confianza(score)
+                    decision = decision_final(tipo, score, confianza)
+
+                    print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
+
+                    # 🛡️ MODO SEGURO: Solo entrar si confianza alta
+                    if not decision or confianza < 70:
+                        print("⏭️  SIN SEÑAL O POCA CONFIANZA")
+                        time.sleep(3)
+                        continue
+
+                    # ==================================
+                    # 💸 CALCULAR MONTO CORRECTO
+                    # ==================================
+                    monto_bruto = MONTO_BASE * martingala
+                    monto_final = round(monto_bruto, 2)  # ✅ REDONDEAR
+                    
+                    enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Monto: {monto_final}")
+
+                    contract_id = bot.comprar(par, decision, monto_final)
+                    print(f"📥 contract_id = {contract_id}")
+
+                    if contract_id:
+                        print(f"✅ ORDEN ENVIADA! ID: {contract_id}")
+                        
+                        profit = bot.check_result(contract_id)
+                        print(f"🏁 RESULTADO: Profit = {profit}")
+                        
+                        # 🧠 APRENDER
+                        datos_ia["par"] = par
+                        aprender_resultado(profit, datos_ia)
+
+                        if profit > 0:
+                            enviar_telegram(f"✅ GANADA | +{profit} USD 🧠")
+                            martingala = 1
+                            racha_perdidas = 0
+                            operaciones_hoy['ganadas'] += 1
+                        else:
+                            enviar_telegram(f"❌ PERDIDA | {profit} USD 🧠")
+                            racha_perdidas += 1
+                            perdidas_dia += profit
+                            operaciones_hoy['perdidas'] += 1
+                            
+                            # 🛡️ MARTINGALA MÁS SUAVE
+                            if racha_perdidas >= 2:
+                                martingala = 1
+                            else:
+                                martingala *= 1.2 # Bajé de 1.3 a 1.2
+
+                        operaciones_hoy['total'] += profit
+
+                        if perdidas_dia <= LIMITE_PERDIDA:
+                            enviar_telegram("🛑 LÍMITE DE PÉRDIDA ALCANZADO - DETENIENDO")
+                            enviar_reporte()
+                            bot.cerrar()
+                            return
+
+                    else:
+                        print("❌ FALLO: contract_id es None")
+                        enviar_telegram(f"⚠️ FALLO EJECUCIÓN EN {par}")
+                        time.sleep(10)
+
+                except Exception as e:
+                    print(f"💥 ERROR EN {par}: {e}")
+                    time.sleep(10)
+
+            # ==================================
+            # FIN CICLO
+            # ==================================
+            print("\n✅ Ciclo terminado. Cerrando conexión...")
+            bot.cerrar()
+            print("⏳ ESPERANDO 60 SEGUNDOS...")
+            time.sleep(60)
+
+        except Exception as e:
+            print(f"💥 ERROR GLOBAL: {e}")
+            if bot:
+                bot.cerrar()
+            print("⏳ ESPERANDO 60 SEGUNDOS...")
+            time.sleep(60)
+
+# =========================
+# INICIAR
+# =========================
 if __name__ == "__main__":
-    print("=====================================")
-    print("🚀 INICIANDO BOT DOLA - MODO SEGURO")
-    print("=====================================")
-    
-    # ✅ MENSAJE DE INICIO
-    enviar_mensaje_telegram("🤖 **BOT DOLA INICIADO** 🚀\n✅ Modo Seguridad Activado\n⏰ Horario: 06:00 AM a 20:00 PM")
-    
-    ejecutar_trading()
+    ejecutar_bot()
