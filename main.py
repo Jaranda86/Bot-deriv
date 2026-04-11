@@ -8,8 +8,8 @@ from ia_pro_v1 import analizar_mercado, calcular_confianza, decision_final, apre
 # =========================
 # CONFIGURACIÓN TELEGRAM
 # =========================
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+TOKEN = os.getenv("8329264709:AAHyKe68ERfMr37EM8qn33KzMJuCuV6KeIM")
+CHAT_ID = os.getenv("6826449033")
 
 def enviar_telegram(msg):
     try:
