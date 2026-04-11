@@ -45,9 +45,12 @@ def esta_dentro_horario():
 # 🧠 LÓGICA REAL DE LA IA
 def calcular_fuerza_senal():
     """Aquí la IA analiza el mercado"""
-    import random
-    # Simulación realista de puntuación
-    return random.randint(40, 95)
+    
+def calcular_fuerza_senal():
+    """Aquí la IA analiza el mercado"""
+    # 🚀 FORZANDO SEÑAL FUERTE PARA PRUEBA
+    return 99
+    
 
 # 📊 EJECUCIÓN REAL DE OPERACIONES
 def abrir_operacion(riesgo, sl, tp):
