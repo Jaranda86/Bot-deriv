@@ -8,19 +8,27 @@ from ia_pro_v1 import analizar_mercado, calcular_confianza, decision_final, apre
 # =========================
 # CONFIGURACIÓN TELEGRAM
 # =========================
-TOKEN = os.getenv("8329264709:AAHyKe68ERfMr37EM8qn33KzMJuCuV6KeIM")
-CHAT_ID = os.getenv("6826449033")
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 def enviar_telegram(msg):
     try:
-        print("📤 ENVIANDO A TG:", msg)
+        print("📤 INTENTANDO ENVIAR A TELEGRAM:", msg[:50]) # Muestra en consola
         if not TOKEN or not CHAT_ID:
-            print("❌ TELEGRAM NO CONFIGURADO")
+            print("❌ FALTA TOKEN O CHAT_ID EN VARIABLES")
             return
+            
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": msg}, timeout=10)
+        datos = {"chat_id": CHAT_ID, "text": msg}
+        respuesta = requests.post(url, data=datos, timeout=15)
+        
+        if respuesta.status_code == 200:
+            print("✅ MENSAJE ENVIADO CORRECTAMENTE")
+        else:
+            print(f"⚠️ RESPUESTA DE TG: {respuesta.status_code} - {respuesta.text}")
+            
     except Exception as e:
-        print("❌ ERROR TG:", e)
+        print(f"💥 ERROR ENVIANDO A TG: {str(e)}")
 
 # =========================
 # ⏰ CONFIGURACIÓN HORARIO
@@ -37,7 +45,7 @@ def esta_dentro_horario():
 # =========================
 pares = ["R_10", "R_25", "R_50"]
 MONTO_BASE = 0.35           
-LIMITE_PERDIDA = -15.00    # 🛡️ Límite más bajo: se detiene al perder $15
+LIMITE_PERDIDA = -15.00    # 🛡️ Se detiene al perder $15
 
 martingala = 1
 racha_perdidas = 0
@@ -54,9 +62,9 @@ def enviar_reporte():
     mensaje = f"""
 📊 **REPORTE DIARIO DE TRADING** 📊
 📅 Fecha: {datetime.datetime.now().strftime("%d/%m/%Y")}
-✅ Operaciones Ganadas: {operaciones_hoy['ganadas']}
-❌ Operaciones Perdidas: {operaciones_hoy['perdidas']}
-💰 Resultado Total: ${operaciones_hoy['total']:.2f}
+✅ Ganadas: {operaciones_hoy['ganadas']}
+❌ Perdidas: {operaciones_hoy['perdidas']}
+💰 Total: ${operaciones_hoy['total']:.2f}
 ⚡ Efectividad: {efectividad}%
     """
     enviar_telegram(mensaje)
@@ -68,36 +76,30 @@ def ejecutar_bot():
     global martingala, racha_perdidas, perdidas_dia, operaciones_hoy
 
     print("🚀 BOT INICIADO - MODO ULTRA SEGURIDAD ACTIVADO 🚀")
-    enviar_telegram("🤖 **BOT DOLA INICIADO** 🚀\n✅ Modo Ultra Seguridad Activado\n⏰ Horario: 06:00 AM a 20:00 PM")
+    enviar_telegram("🤖 **BOT DOLA INICIADO** 🚀\n✅ Modo Ultra Seguridad\n⏰ Horario: 06:00 AM a 20:00 PM")
 
     while True:
         bot = None
         
         # VERIFICAR HORARIO
         if not esta_dentro_horario():
-            print("💤 Fuera de horario. Esperando apertura...")
-            
-            # Enviar reporte al cierre
+            print("💤 Fuera de horario. Esperando...")
             hora_actual = datetime.datetime.now()
             if hora_actual.hour == HORA_FIN and hora_actual.minute >= 5:
                 enviar_reporte()
-                # Reiniciar contadores
                 operaciones_hoy = {'ganadas': 0, 'perdidas': 0, 'total': 0.0}
                 perdidas_dia = 0
-                
-            time.sleep(300) # Esperar 5 min
+            time.sleep(300)
             continue
 
         try:
             print("\n" + "="*60)
-            print("🔄 NUEVO CICLO - CONECTANDO...")
+            print("🔄 NUEVO CICLO")
             print("="*60)
 
-            # 💡 CONECTAR
             bot = DerivBot()
-            conectado = bot.conectar()
-            if not conectado:
-                print("❌ FALLO CONEXIÓN - ESPERANDO 60 SEG...")
+            if not bot.conectar():
+                print("❌ FALLO CONEXIÓN")
                 time.sleep(60)
                 continue
 
@@ -107,47 +109,37 @@ def ejecutar_bot():
             for par in pares:
                 try:
                     print(f"\n📊 ANALIZANDO {par}...")
-
-                    # VELAS
                     velas = bot.get_candles(par)
-                    print(f"📈 Velas recibidas: {len(velas)}")
-
+                    
                     if len(velas) < 10:
-                        print("⚠️ Pocos datos, saltando...")
+                        print("⚠️ Pocos datos")
                         time.sleep(3)
                         continue
 
-                    # ANÁLISIS
                     score, tipo, datos_ia = analizar_mercado(par, velas)
                     confianza = calcular_confianza(score)
                     decision = decision_final(tipo, score, confianza)
 
                     print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
 
-                    # 🛡️ MODO ULTRA SEGURO: Solo entrar si confianza MUY ALTA (mínimo 80%)
+                    # 🛡️ SOLO ENTRAR SI CONFIANZA >= 80%
                     if not decision or confianza < 80:
-                        print("⏭️  SIN SEÑAL O POCA CONFIANZA (necesita >=80%)")
+                        print("⏭️  SALTEANDO (poca confianza)")
                         time.sleep(3)
                         continue
 
-                    # ==================================
-                    # 💸 CALCULAR MONTO: SIN MARTINGALA
-                    # ==================================
-                    # 🛡️ El monto SIEMPRE es el mismo, no aumentamos aunque pierda
+                    # 💸 MONTO SIEMPRE IGUAL (SIN MARTINGALA)
                     monto_final = MONTO_BASE 
                     
                     enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Monto: {monto_final}")
 
                     contract_id = bot.comprar(par, decision, monto_final)
-                    print(f"📥 contract_id = {contract_id}")
 
                     if contract_id:
                         print(f"✅ ORDEN ENVIADA! ID: {contract_id}")
-                        
                         profit = bot.check_result(contract_id)
                         print(f"🏁 RESULTADO: Profit = {profit}")
                         
-                        # 🧠 APRENDER
                         datos_ia["par"] = par
                         aprender_resultado(profit, datos_ia)
 
@@ -160,8 +152,6 @@ def ejecutar_bot():
                             racha_perdidas += 1
                             perdidas_dia += profit
                             operaciones_hoy['perdidas'] += 1
-                            
-                            # 🛡️ Ya NO aumentamos el monto al perder
                             martingala = 1 
 
                         operaciones_hoy['total'] += profit
@@ -181,9 +171,6 @@ def ejecutar_bot():
                     print(f"💥 ERROR EN {par}: {e}")
                     time.sleep(10)
 
-            # ==================================
-            # FIN CICLO
-            # ==================================
             print("\n✅ Ciclo terminado. Cerrando conexión...")
             bot.cerrar()
             print("⏳ ESPERANDO 60 SEGUNDOS...")
@@ -193,7 +180,6 @@ def ejecutar_bot():
             print(f"💥 ERROR GLOBAL: {e}")
             if bot:
                 bot.cerrar()
-            print("⏳ ESPERANDO 60 SEGUNDOS...")
             time.sleep(60)
 
 # =========================
