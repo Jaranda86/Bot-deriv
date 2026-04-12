@@ -8,8 +8,8 @@ from ia_pro_v1 import analizar_mercado, calcular_confianza, decision_final, apre
 # =========================
 # CONFIGURACIÓN TELEGRAM
 # =========================
-TELEGRAM_TOKEN = os.getenv("8329264709:AAHyKe68ERfMr37EM8qn33KzMJuCuV6KeIM")
-CHAT_ID = os.getenv("6826449033")
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 def enviar_telegram(msg):
     try:
@@ -17,11 +17,22 @@ def enviar_telegram(msg):
         if not TOKEN or not CHAT_ID:
             print("❌ FALTA TOKEN O CHAT_ID")
             return
+            
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": msg}, timeout=10)
-        print("✅ ENVIADO OK")
+        datos = {
+            "chat_id": CHAT_ID,
+            "text": msg,
+            "parse_mode": "HTML"
+        }
+        respuesta = requests.post(url, data=datos, timeout=15)
+        
+        if respuesta.status_code == 200:
+            print("✅ MENSAJE ENVIADO OK")
+        else:
+            print(f"⚠️ ERROR TG: {respuesta.status_code}")
+            
     except Exception as e:
-        print("❌ ERROR TG:", str(e))
+        print("❌ ERROR ENVIANDO:", str(e))
 
 # =========================
 # ⏰ HORARIO
@@ -51,7 +62,7 @@ def enviar_reporte():
     total_ops = operaciones_hoy['ganadas'] + operaciones_hoy['perdidas']
     efectividad = round((operaciones_hoy['ganadas'] / total_ops) * 100, 2) if total_ops > 0 else 0
     mensaje = f"""
-📊 **REPORTE DIARIO** 📊
+📊 <b>REPORTE DIARIO DE TRADING</b> 📊
 📅 Fecha: {datetime.datetime.now().strftime("%d/%m/%Y")}
 ✅ Ganadas: {operaciones_hoy['ganadas']}
 ❌ Perdidas: {operaciones_hoy['perdidas']}
@@ -69,7 +80,7 @@ def ejecutar_bot():
     print("=====================================")
     print("🚀 BOT INICIADO - MODO SEGURO 🚀")
     print("=====================================")
-    enviar_telegram("🤖 **BOT DOLA INICIADO** 🚀\n✅ Modo Seguro\n⏰ 06:00 AM a 20:00 PM")
+    enviar_telegram("🤖 <b>BOT DOLA INICIADO</b> 🚀\n✅ Modo Seguro Activado\n⏰ 06:00 AM a 20:00 PM")
 
     while True:
         bot = None
@@ -180,7 +191,6 @@ if __name__ == "__main__":
         ejecutar_bot()
     except Exception as e:
         print(f"💥 ERROR FATAL: {e}")
-        # Intentar avisar del error
         try:
             enviar_telegram(f"💥 BOT DETENIDO POR ERROR: {e}")
         except:
