@@ -8,59 +8,50 @@ from ia_pro_v1 import analizar_mercado, calcular_confianza, decision_final, apre
 # =========================
 # CONFIGURACIÓN TELEGRAM
 # =========================
-TOKEN = os.getenv("8329264709:AAHyKe68ERfMr37EM8qn33KzMJuCuV6KeIM")
-CHAT_ID = os.getenv("6826449033")
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 def enviar_telegram(msg):
     try:
-        print("📤 INTENTANDO ENVIAR A TELEGRAM:", msg[:50]) # Muestra en consola
+        print("📤 ENVIANDO A TG:", msg)
         if not TOKEN or not CHAT_ID:
-            print("❌ FALTA TOKEN O CHAT_ID EN VARIABLES")
+            print("❌ FALTA TOKEN O CHAT_ID")
             return
-            
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        datos = {"chat_id": CHAT_ID, "text": msg}
-        respuesta = requests.post(url, data=datos, timeout=15)
-        
-        if respuesta.status_code == 200:
-            print("✅ MENSAJE ENVIADO CORRECTAMENTE")
-        else:
-            print(f"⚠️ RESPUESTA DE TG: {respuesta.status_code} - {respuesta.text}")
-            
+        requests.post(url, data={"chat_id": CHAT_ID, "text": msg}, timeout=10)
+        print("✅ ENVIADO OK")
     except Exception as e:
-        print(f"💥 ERROR ENVIANDO A TG: {str(e)}")
+        print("❌ ERROR TG:", str(e))
 
 # =========================
-# ⏰ CONFIGURACIÓN HORARIO
+# ⏰ HORARIO
 # =========================
-HORA_INICIO = 9    # 9 AM servidor = 6 AM tuyo
-HORA_FIN = 23      # 11 PM servidor = 8 PM tuyo
+HORA_INICIO = 9
+HORA_FIN = 23
 
 def esta_dentro_horario():
     hora_actual = datetime.datetime.now().hour
     return HORA_INICIO <= hora_actual < HORA_FIN
 
 # =========================
-# 🛡️ PARÁMETROS MODO ULTRA SEGURO
+# 🛡️ PARÁMETROS SEGUROS
 # =========================
 pares = ["R_10", "R_25", "R_50"]
 MONTO_BASE = 0.35           
-LIMITE_PERDIDA = -15.00    # 🛡️ Se detiene al perder $15
+LIMITE_PERDIDA = -15.00    
 
-martingala = 1
 racha_perdidas = 0
 perdidas_dia = 0
 operaciones_hoy = {'ganadas': 0, 'perdidas': 0, 'total': 0.0}
 
 # =========================
-# 📊 FUNCIÓN REPORTE DIARIO
+# 📊 REPORTE
 # =========================
 def enviar_reporte():
     total_ops = operaciones_hoy['ganadas'] + operaciones_hoy['perdidas']
     efectividad = round((operaciones_hoy['ganadas'] / total_ops) * 100, 2) if total_ops > 0 else 0
-    
     mensaje = f"""
-📊 **REPORTE DIARIO DE TRADING** 📊
+📊 **REPORTE DIARIO** 📊
 📅 Fecha: {datetime.datetime.now().strftime("%d/%m/%Y")}
 ✅ Ganadas: {operaciones_hoy['ganadas']}
 ❌ Perdidas: {operaciones_hoy['perdidas']}
@@ -73,10 +64,12 @@ def enviar_reporte():
 # BUCLE PRINCIPAL
 # =========================
 def ejecutar_bot():
-    global martingala, racha_perdidas, perdidas_dia, operaciones_hoy
+    global racha_perdidas, perdidas_dia, operaciones_hoy
 
-    print("🚀 BOT INICIADO - MODO ULTRA SEGURIDAD ACTIVADO 🚀")
-    enviar_telegram("🤖 **BOT DOLA INICIADO** 🚀\n✅ Modo Ultra Seguridad\n⏰ Horario: 06:00 AM a 20:00 PM")
+    print("=====================================")
+    print("🚀 BOT INICIADO - MODO SEGURO 🚀")
+    print("=====================================")
+    enviar_telegram("🤖 **BOT DOLA INICIADO** 🚀\n✅ Modo Seguro\n⏰ 06:00 AM a 20:00 PM")
 
     while True:
         bot = None
@@ -93,9 +86,9 @@ def ejecutar_bot():
             continue
 
         try:
-            print("\n" + "="*60)
+            print("\n" + "="*50)
             print("🔄 NUEVO CICLO")
-            print("="*60)
+            print("="*50)
 
             bot = DerivBot()
             if not bot.conectar():
@@ -103,16 +96,14 @@ def ejecutar_bot():
                 time.sleep(60)
                 continue
 
-            # ==================================
             # RECORRER PARES
-            # ==================================
             for par in pares:
                 try:
                     print(f"\n📊 ANALIZANDO {par}...")
                     velas = bot.get_candles(par)
                     
                     if len(velas) < 10:
-                        print("⚠️ Pocos datos")
+                        print("⚠️ Pocos datos, salteando...")
                         time.sleep(3)
                         continue
 
@@ -122,13 +113,13 @@ def ejecutar_bot():
 
                     print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
 
-                    # 🛡️ SOLO ENTRAR SI CONFIANZA >= 80%
+                    # 🛡️ FILTRO DE SEGURIDAD
                     if not decision or confianza < 80:
                         print("⏭️  SALTEANDO (poca confianza)")
                         time.sleep(3)
                         continue
 
-                    # 💸 MONTO SIEMPRE IGUAL (SIN MARTINGALA)
+                    # 💸 MONTO FIJO
                     monto_final = MONTO_BASE 
                     
                     enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Monto: {monto_final}")
@@ -152,12 +143,11 @@ def ejecutar_bot():
                             racha_perdidas += 1
                             perdidas_dia += profit
                             operaciones_hoy['perdidas'] += 1
-                            martingala = 1 
 
                         operaciones_hoy['total'] += profit
 
                         if perdidas_dia <= LIMITE_PERDIDA:
-                            enviar_telegram("🛑 LÍMITE DE PÉRDIDA ALCANZADO - DETENIENDO")
+                            enviar_telegram("🛑 LÍMITE ALCANZADO - DETENIENDO")
                             enviar_reporte()
                             bot.cerrar()
                             return
@@ -186,4 +176,12 @@ def ejecutar_bot():
 # INICIAR
 # =========================
 if __name__ == "__main__":
-    ejecutar_bot()
+    try:
+        ejecutar_bot()
+    except Exception as e:
+        print(f"💥 ERROR FATAL: {e}")
+        # Intentar avisar del error
+        try:
+            enviar_telegram(f"💥 BOT DETENIDO POR ERROR: {e}")
+        except:
+            pass
