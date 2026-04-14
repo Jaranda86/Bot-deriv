@@ -45,10 +45,10 @@ def esta_dentro_horario():
     return HORA_INICIO <= hora_actual < HORA_FIN
 
 # =========================
-# 🛡️ PARÁMETROS OPTIMIZADOS
+# 🛡️ PARÁMETROS CORREGIDOS
 # =========================
 pares = ["R_10", "R_25", "R_50"]
-MONTO_BASE = 0.30           # 👇 Reducido para equilibrar ganancia/perdida
+MONTO_BASE = 0.35           # ✅ VOLVEMOS A 0.35 POR REQUISITO DE DERIV
 LIMITE_PERDIDA = -15.00    
 
 racha_perdidas = 0
@@ -78,9 +78,9 @@ def ejecutar_bot():
     global racha_perdidas, perdidas_dia, operaciones_hoy
 
     print("=====================================")
-    print("🚀 BOT INICIADO - MODO OPTIMIZADO 🚀")
+    print("🚀 BOT INICIADO - MODO SEGURIDAD MAX 🚀")
     print("=====================================")
-    enviar_telegram("🤖 <b>BOT DOLA INICIADO</b> 🚀\n✅ Modo Optimizado Activado\n💰 Monto: $0.30\n🎯 Confianza mínima: 85%")
+    enviar_telegram("🤖 <b>BOT DOLA INICIADO</b> 🚀\n✅ Modo Seguridad Max Activado\n💰 Monto: $0.35\n🎯 Confianza mínima: 90%")
 
     while True:
         bot = None
@@ -124,13 +124,13 @@ def ejecutar_bot():
 
                     print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
 
-                    # 🛡️ FILTRO DE SEGURIDAD MÁS ESTRICTO
-                    if not decision or confianza < 85:  # 👇 Subido de 80 a 85
+                    # 🛡️ FILTRO DE SEGURIDAD MUY ESTRICTO
+                    if not decision or confianza < 90:  # ✅ SUBIDO A 90% PARA ENTRAR SOLO EN LO SEGURO
                         print("⏭️  SALTEANDO (poca confianza o sin señal)")
                         time.sleep(3)
                         continue
 
-                    # 💸 MONTO AJUSTADO
+                    # 💸 MONTO FIJO SEGÚN PLATAFORMA
                     monto_final = MONTO_BASE 
                     
                     enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Monto: {monto_final}")
