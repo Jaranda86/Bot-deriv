@@ -7,60 +7,50 @@ class Estrategia(Enum):
     NINGUNA = "PAUSAR"
 
 class TipoActivo(Enum):
-    TIPO_A = "LIQUIDEZ"   # EUR/USD, Indices
-    TIPO_B = "VOLATIL"    # Oro, Cripto
-    TIPO_C = "LENTO"      # Acciones
+    TIPO_A = "LIQUIDEZ"   # Tendencia clara
+    TIPO_B = "VOLATIL"    # Movimientos fuertes
+    TIPO_C = "LENTO"      # Rango / Lento
 
 def obtener_estrategia(hora_actual, tipo_activo):
     """
-    Lógica principal basada en horarios y activos.
-    Retorna qué estrategias deben estar ACTIVAS.
+    LÓGICA ULTRA CAUTELOSA v2.0
+    Basada en resultados del día 15/04
     """
     
     # ==============================================
-    # ZONA 1: MAÑANA (11:00 - 13:00)
+    # 🚫 09:00 - 11:00 | ZONA LETAL
+    # Resultado: Perdidas fuertes en todas las estrategias
+    # ACCIÓN: NO OPERAR NADA
     # ==============================================
-    if 11 <= hora_actual < 14:
-        if tipo_activo in [TipoActivo.TIPO_A, TipoActivo.TIPO_C]:
-            return [Estrategia.R_10, Estrategia.R_25]
-        elif tipo_activo == TipoActivo.TIPO_B:
-            return [Estrategia.R_50]
+    if 9 <= hora_actual < 11:
+        return [Estrategia.NINGUNA]
 
     # ==============================================
-    # ZONA 2: TARDE TEMPRANO (14:00 - 16:00)
+    # ✅ 11:00 - 14:00 | MEJOR HORARIO
+    # Resultado: R_50 funcionó excelente, R_25 regular
+    # ACCIÓN: Priorizar R_50, permitir R_25, PROHIBIR R_10
+    # ==============================================
+    elif 11 <= hora_actual < 14:
+        if tipo_activo == TipoActivo.TIPO_B: # Activos volátiles
+            return [Estrategia.R_50]
+        else: # Activos normales
+            return [Estrategia.R_25]
+
+    # ==============================================
+    # ⚠️ 14:00 - 17:00 | ZONA DE RIESGO
+    # Resultado: R_10 y R_25 fallaron mucho
+    # ACCIÓN: SOLO R_50 o PAUSAR
     # ==============================================
     elif 14 <= hora_actual < 17:
         if tipo_activo == TipoActivo.TIPO_B:
-            return [Estrategia.R_50]
+            return [Estrategia.R_50] # Único que resiste volatilidad
         else:
-            return [Estrategia.NINGUNA]
+            return [Estrategia.NINGUNA] # Mejor no arriesgar
 
     # ==============================================
-    # ZONA 3: TARDE TARDE / ALTO RIESGO (17:00 - 18:00)
+    # ❌ 17:00 EN ADELANTE | ZONA PROHIBIDA
+    # Resultado: Desastre total con R_10 y R_25
+    # ACCIÓN: CERRADO COMPLETO
     # ==============================================
-    elif 17 <= hora_actual < 19:
-        # REGLA DE ORO: R_25 PROHIBIDO
-        if tipo_activo == TipoActivo.TIPO_B:
-            return [Estrategia.R_50]
-        else:
-            return [Estrategia.NINGUNA] # OPCIÓN SEGURA: PAUSAR
-
-    # ==============================================
-    # ZONA 4: NOCHE (19:00 - 21:00)
-    # ==============================================
-    elif 19 <= hora_actual < 22:
-        if tipo_activo in [TipoActivo.TIPO_A, TipoActivo.TIPO_C]:
-            return [Estrategia.R_10]
-        else:
-            return [Estrategia.NINGUNA]
-
-    # ==============================================
-    # FUERA DE HORARIO DEFINIDO
-    # ==============================================
-    else:
+    else: 
         return [Estrategia.NINGUNA]
-
-# ------------------------------
-# CONFIGURACIÓN GLOBAL
-# ------------------------------
-MONTO_FIJO = 0.35  # No cambiar, valor mínimo
