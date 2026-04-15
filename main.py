@@ -5,6 +5,11 @@ import datetime
 from conexion_deriv import DerivBot
 from ia_pro_v1 import analizar_mercado, calcular_confianza, decision_final, aprender_resultado
 
+# ==============================================
+# ✅ NUEVO: IMPORTAMOS LA LÓGICA DE HORARIOS
+# ==============================================
+from time_strategy import obtener_estrategia, TipoActivo, Estrategia
+
 # =========================
 # CONFIGURACIÓN TELEGRAM
 # =========================
@@ -47,8 +52,7 @@ def esta_dentro_horario():
 # =========================
 # 🛡️ PARÁMETROS CORREGIDOS
 # =========================
-pares = ["R_10", "R_25", "R_50"]
-MONTO_BASE = 0.35           # ✅ VOLVEMOS A 0.35 POR REQUISITO DE DERIV
+MONTO_BASE = 0.35           # ✅ VALOR FIJO MÍNIMO
 LIMITE_PERDIDA = -15.00    
 
 racha_perdidas = 0
@@ -85,7 +89,7 @@ def ejecutar_bot():
     while True:
         bot = None
         
-        # VERIFICAR HORARIO
+        # VERIFICAR HORARIO GENERAL
         if not esta_dentro_horario():
             print("💤 Fuera de horario. Esperando...")
             hora_actual = datetime.datetime.now()
@@ -107,10 +111,38 @@ def ejecutar_bot():
                 time.sleep(60)
                 continue
 
+            # ==============================================
+            # ✅ NUEVA LÓGICA: VERIFICAR QUÉ ESTRATEGIAS ESTÁN PERMITIDAS
+            # ==============================================
+            ahora = datetime.datetime.now()
+            hora_actual = ahora.hour
+            
             # RECORRER PARES
             for par in pares:
                 try:
                     print(f"\n📊 ANALIZANDO {par}...")
+                    
+                    # --- CLASIFICAR EL ACTIVO SEGÚN SU TIPO ---
+                    if par in ["R_10", "R_25"]: # Asumimos estos como Tipo A o C
+                        tipo_activo = TipoActivo.TIPO_A
+                    elif par == "R_50": # Asumimos R_50 como volátil
+                        tipo_activo = TipoActivo.TIPO_B
+                    else:
+                        tipo_activo = TipoActivo.TIPO_C
+                        
+                    # --- CONSULTAR REGLAS ---
+                    estrategias_permitidas = obtener_estrategia(hora_actual, tipo_activo)
+                    
+                    # Verificar si este par está permitido ahora
+                    permitido = any(e.value == par for e in estrategias_permitidas)
+                    
+                    if not permitido:
+                        print(f"⏭️  {par} DESACTIVADO por horario/rango.")
+                        time.sleep(2)
+                        continue
+                    else:
+                        print(f"✅ {par} ACTIVO - Operación permitida")
+
                     velas = bot.get_candles(par)
                     
                     if len(velas) < 10:
@@ -124,13 +156,12 @@ def ejecutar_bot():
 
                     print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
 
-                    # 🛡️ FILTRO DE SEGURIDAD MUY ESTRICTO
-                    if not decision or confianza < 90:  # ✅ SUBIDO A 90% PARA ENTRAR SOLO EN LO SEGURO
+                    # 🛡️ FILTRO DE SEGURIDAD
+                    if not decision or confianza < 90:
                         print("⏭️  SALTEANDO (poca confianza o sin señal)")
                         time.sleep(3)
                         continue
 
-                    # 💸 MONTO FIJO SEGÚN PLATAFORMA
                     monto_final = MONTO_BASE 
                     
                     enviar_telegram(f"🚀 ENTRADA | {par} | {decision.upper()} | Monto: {monto_final}")
@@ -188,6 +219,8 @@ def ejecutar_bot():
 # =========================
 if __name__ == "__main__":
     try:
+        # Definimos los pares aquí para asegurar que existan
+        pares = ["R_10", "R_25", "R_50"]
         ejecutar_bot()
     except Exception as e:
         print(f"💥 ERROR FATAL: {e}")
