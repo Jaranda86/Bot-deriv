@@ -6,7 +6,7 @@ from conexion_deriv import DerivBot
 from ia_pro_v1 import analizar_mercado, calcular_confianza, decision_final, aprender_resultado
 
 # ==============================================
-# ✅ NUEVO: IMPORTAMOS LA LÓGICA DE HORARIOS
+# ✅ IMPORTAMOS LA NUEVA LÓGICA DE HORARIOS
 # ==============================================
 from time_strategy import obtener_estrategia, TipoActivo, Estrategia
 
@@ -40,20 +40,21 @@ def enviar_telegram(msg):
         print("❌ ERROR ENVIANDO:", str(e))
 
 # =========================
-# ⏰ HORARIO
+# ⏰ HORARIO GENERAL
 # =========================
-HORA_INICIO = 9
-HORA_FIN = 23
+HORA_INICIO = 11  # ✅ CAMBIADO: Empezamos más tarde
+HORA_FIN = 17     # ✅ CAMBIADO: Terminamos más temprano
 
 def esta_dentro_horario():
     hora_actual = datetime.datetime.now().hour
     return HORA_INICIO <= hora_actual < HORA_FIN
 
 # =========================
-# 🛡️ PARÁMETROS CORREGIDOS
+# 🛡️ PARÁMETROS DE RIESGO
 # =========================
-MONTO_BASE = 0.35           # ✅ VALOR FIJO MÍNIMO
-LIMITE_PERDIDA = -15.00    
+pares = ["R_10", "R_25", "R_50"]
+MONTO_BASE = 0.35           # ✅ FIJO
+LIMITE_PERDIDA = -10.00    # ✅ BAJADO: Si perdemos 10 USD paramos ya
 
 racha_perdidas = 0
 perdidas_dia = 0
@@ -82,16 +83,16 @@ def ejecutar_bot():
     global racha_perdidas, perdidas_dia, operaciones_hoy
 
     print("=====================================")
-    print("🚀 BOT INICIADO - MODO SEGURIDAD MAX 🚀")
+    print("🚀 BOT INICIADO - MODO SUPER VIGILANCIA 🚀")
     print("=====================================")
-    enviar_telegram("🤖 <b>BOT DOLA INICIADO</b> 🚀\n✅ Modo Seguridad Max Activado\n💰 Monto: $0.35\n🎯 Confianza mínima: 90%")
+    enviar_telegram("🤖 <b>BOT DOLA INICIADO</b> 🚀\n✅ Modo Ultra Seguridad Activado\n💰 Monto: $0.35\n🎯 Confianza mínima: 90%\n⏰ Horario: 11:00 a 17:00")
 
     while True:
         bot = None
         
         # VERIFICAR HORARIO GENERAL
         if not esta_dentro_horario():
-            print("💤 Fuera de horario. Esperando...")
+            print("💤 Fuera de horario seguro. Esperando...")
             hora_actual = datetime.datetime.now()
             if hora_actual.hour == HORA_FIN and hora_actual.minute >= 5:
                 enviar_reporte()
@@ -111,29 +112,23 @@ def ejecutar_bot():
                 time.sleep(60)
                 continue
 
-            # ==============================================
-            # ✅ NUEVA LÓGICA: VERIFICAR QUÉ ESTRATEGIAS ESTÁN PERMITIDAS
-            # ==============================================
-            ahora = datetime.datetime.now()
-            hora_actual = ahora.hour
-            
             # RECORRER PARES
             for par in pares:
                 try:
                     print(f"\n📊 ANALIZANDO {par}...")
                     
-                    # --- CLASIFICAR EL ACTIVO SEGÚN SU TIPO ---
-                    if par in ["R_10", "R_25"]: # Asumimos estos como Tipo A o C
-                        tipo_activo = TipoActivo.TIPO_A
-                    elif par == "R_50": # Asumimos R_50 como volátil
+                    # --- CLASIFICAR EL ACTIVO ---
+                    # Asignamos tipo según la estrategia por comportamiento observado
+                    if par == "R_50":
                         tipo_activo = TipoActivo.TIPO_B
-                    else:
+                    elif par == "R_25":
+                        tipo_activo = TipoActivo.TIPO_A
+                    else: # R_10
                         tipo_activo = TipoActivo.TIPO_C
                         
-                    # --- CONSULTAR REGLAS ---
-                    estrategias_permitidas = obtener_estrategia(hora_actual, tipo_activo)
+                    # --- CONSULTAR REGLAS DE HORARIO ---
+                    estrategias_permitidas = obtener_estrategia(datetime.datetime.now().hour, tipo_activo)
                     
-                    # Verificar si este par está permitido ahora
                     permitido = any(e.value == par for e in estrategias_permitidas)
                     
                     if not permitido:
@@ -185,11 +180,20 @@ def ejecutar_bot():
                             racha_perdidas += 1
                             perdidas_dia += profit
                             operaciones_hoy['perdidas'] += 1
+                            
+                            # 🛡️ NUEVO: PAUSA POR RACHA
+                            if racha_perdidas >= 2:
+                                msg_pausa = f"⚠️ RACHA DE {racha_perdidas} PERDIDAS - PAUSANDO 5 MINUTOS PARA PROTEGER CUENTA"
+                                print(msg_pausa)
+                                enviar_telegram(msg_pausa)
+                                time.sleep(300) # Espera 5 minutos completos
+                                racha_perdidas = 0 # Reiniciamos contador
 
                         operaciones_hoy['total'] += profit
 
+                        # 🛡️ LÍMITE DE PÉRDIDA DIARIA
                         if perdidas_dia <= LIMITE_PERDIDA:
-                            enviar_telegram("🛑 LÍMITE ALCANZADO - DETENIENDO")
+                            enviar_telegram(f"🛑 LÍMITE DE ${LIMITE_PERDIDA} ALCANZADO - DETENIENDO BOT")
                             enviar_reporte()
                             bot.cerrar()
                             return
@@ -219,8 +223,6 @@ def ejecutar_bot():
 # =========================
 if __name__ == "__main__":
     try:
-        # Definimos los pares aquí para asegurar que existan
-        pares = ["R_10", "R_25", "R_50"]
         ejecutar_bot()
     except Exception as e:
         print(f"💥 ERROR FATAL: {e}")
@@ -228,3 +230,4 @@ if __name__ == "__main__":
             enviar_telegram(f"💥 BOT DETENIDO POR ERROR: {e}")
         except:
             pass
+           
