@@ -5,9 +5,6 @@ import datetime
 from conexion_deriv import DerivBot
 from ia_pro_v1 import analizar_mercado, calcular_confianza, decision_final, aprender_resultado
 
-# ==============================================
-# ✅ IMPORTAMOS LA NUEVA LÓGICA DE HORARIOS
-# ==============================================
 from time_strategy import obtener_estrategia, TipoActivo, Estrategia
 
 # =========================
@@ -40,21 +37,21 @@ def enviar_telegram(msg):
         print("❌ ERROR ENVIANDO:", str(e))
 
 # =========================
-# ⏰ HORARIO GENERAL
+# ⏰ HORARIO ULTRA REDUCIDO
 # =========================
-HORA_INICIO = 11  # ✅ CAMBIADO: Empezamos más tarde
-HORA_FIN = 17     # ✅ CAMBIADO: Terminamos más temprano
+HORA_INICIO = 11
+HORA_FIN = 14  # ✅ TERMINA A LAS 14:00 HS
 
 def esta_dentro_horario():
     hora_actual = datetime.datetime.now().hour
     return HORA_INICIO <= hora_actual < HORA_FIN
 
 # =========================
-# 🛡️ PARÁMETROS DE RIESGO
+# 🛡️ PARÁMETROS DE RIESGO MÁXIMO
 # =========================
-pares = ["R_10", "R_25", "R_50"]
-MONTO_BASE = 0.35           # ✅ FIJO
-LIMITE_PERDIDA = -10.00    # ✅ BAJADO: Si perdemos 10 USD paramos ya
+pares = ["R_50"]  # ✅ SOLO R_50, QUITAMOS LOS OTROS
+MONTO_BASE = 0.35
+LIMITE_PERDIDA = -5.00    # ✅ SI PERDEMOS 5 USD PARAMOS YA
 
 racha_perdidas = 0
 perdidas_dia = 0
@@ -83,16 +80,15 @@ def ejecutar_bot():
     global racha_perdidas, perdidas_dia, operaciones_hoy
 
     print("=====================================")
-    print("🚀 BOT INICIADO - MODO SUPER VIGILANCIA 🚀")
+    print("🚀 BOT INICIADO - MODO CIRUJANO 🚀")
     print("=====================================")
-    enviar_telegram("🤖 <b>BOT DOLA INICIADO</b> 🚀\n✅ Modo Ultra Seguridad Activado\n💰 Monto: $0.35\n🎯 Confianza mínima: 90%\n⏰ Horario: 11:00 a 17:00")
+    enviar_telegram("🤖 <b>MODO CIRUJANO ACTIVADO</b> 🔪\n✅ Solo R_50\n⏰ Horario: 11:00 a 14:00\n🎯 Confianza: 95%+\n🛑 Stop Loss: $5.00")
 
     while True:
         bot = None
         
-        # VERIFICAR HORARIO GENERAL
         if not esta_dentro_horario():
-            print("💤 Fuera de horario seguro. Esperando...")
+            print("💤 Fuera de horario quirúrgico. Esperando...")
             hora_actual = datetime.datetime.now()
             if hora_actual.hour == HORA_FIN and hora_actual.minute >= 5:
                 enviar_reporte()
@@ -112,31 +108,22 @@ def ejecutar_bot():
                 time.sleep(60)
                 continue
 
-            # RECORRER PARES
             for par in pares:
                 try:
                     print(f"\n📊 ANALIZANDO {par}...")
                     
-                    # --- CLASIFICAR EL ACTIVO ---
-                    # Asignamos tipo según la estrategia por comportamiento observado
-                    if par == "R_50":
-                        tipo_activo = TipoActivo.TIPO_B
-                    elif par == "R_25":
-                        tipo_activo = TipoActivo.TIPO_A
-                    else: # R_10
-                        tipo_activo = TipoActivo.TIPO_C
+                    tipo_activo = TipoActivo.TIPO_B
                         
-                    # --- CONSULTAR REGLAS DE HORARIO ---
                     estrategias_permitidas = obtener_estrategia(datetime.datetime.now().hour, tipo_activo)
                     
                     permitido = any(e.value == par for e in estrategias_permitidas)
                     
                     if not permitido:
-                        print(f"⏭️  {par} DESACTIVADO por horario/rango.")
+                        print(f"⏭️  {par} DESACTIVADO.")
                         time.sleep(2)
                         continue
                     else:
-                        print(f"✅ {par} ACTIVO - Operación permitida")
+                        print(f"✅ {par} ACTIVO")
 
                     velas = bot.get_candles(par)
                     
@@ -151,9 +138,9 @@ def ejecutar_bot():
 
                     print(f"📊 Score: {score} | Confianza: {confianza}% | Decisión: {decision}")
 
-                    # 🛡️ FILTRO DE SEGURIDAD
-                    if not decision or confianza < 90:
-                        print("⏭️  SALTEANDO (poca confianza o sin señal)")
+                    # 🛡️ FILTRO DE CONFIANZA SUBIDO A 95%
+                    if not decision or confianza < 95:
+                        print("⏭️  SALTEANDO (confianza < 95% o sin señal)")
                         time.sleep(3)
                         continue
 
@@ -181,19 +168,19 @@ def ejecutar_bot():
                             perdidas_dia += profit
                             operaciones_hoy['perdidas'] += 1
                             
-                            # 🛡️ NUEVO: PAUSA POR RACHA
+                            # PAUSA INMEDIATA
                             if racha_perdidas >= 2:
-                                msg_pausa = f"⚠️ RACHA DE {racha_perdidas} PERDIDAS - PAUSANDO 5 MINUTOS PARA PROTEGER CUENTA"
+                                msg_pausa = f"⚠️ RACHA DE {racha_perdidas} PERDIDAS - PAUSA 10 MINUTOS"
                                 print(msg_pausa)
                                 enviar_telegram(msg_pausa)
-                                time.sleep(300) # Espera 5 minutos completos
-                                racha_perdidas = 0 # Reiniciamos contador
+                                time.sleep(600) # 10 minutos de descanso
+                                racha_perdidas = 0
 
                         operaciones_hoy['total'] += profit
 
-                        # 🛡️ LÍMITE DE PÉRDIDA DIARIA
+                        # LÍMITE DE PÉRDIDA DIARIA
                         if perdidas_dia <= LIMITE_PERDIDA:
-                            enviar_telegram(f"🛑 LÍMITE DE ${LIMITE_PERDIDA} ALCANZADO - DETENIENDO BOT")
+                            enviar_telegram(f"🛑 LÍMITE DE ${LIMITE_PERDIDA} ALCANZADO - DETENIENDO")
                             enviar_reporte()
                             bot.cerrar()
                             return
@@ -227,7 +214,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"💥 ERROR FATAL: {e}")
         try:
-            enviar_telegram(f"💥 BOT DETENIDO POR ERROR: {e}")
+            enviar_telegram(f"💥 BOT DETENIDO: {e}")
         except:
             pass
-           
