@@ -67,7 +67,7 @@ def ejecutar_bot():
     global racha_perdidas, perdidas_dia, operaciones_hoy
 
     print("🚀 BOT INICIADO - NUEVA ESTRATEGIA 🚀")
-    enviar_telegram("🤖 <b>VERSION 2.0 ACTIVADA</b>\n✅ Nueva Logica\n⏰ 11:00 a 14:00\n🛑 Stop Loss: $5.00")
+    enviar_telegram("🤖 <b>VERSION 2.1 ACTIVADA</b>\n✅ Logica Mejorada\n⏰ 11:00 a 14:00\n🛑 Stop Loss: $5.00")
 
     # INICIALIZAMOS LA NUEVA ESTRATEGIA
     estrategia = EstrategiaAvanzada()
@@ -103,11 +103,12 @@ def ejecutar_bot():
                     # ==== AQUI USAMOS LA NUEVA LOGICA ====
                     señal, confianza, info = estrategia.calcular_senal(velas)
                     
-                    print(f"📊 Señal: {señal} | Confianza: {confianza}%")
+                    print(f"📊 Señal: {señal} | Confianza: {confianza}% | {info}")
 
                     # Solo entramos si hay señal y confianza alta
-                    if señal and confianza >= 85:
-                        enviar_telegram(f"🚀 ENTRADA | {par} | {señal.upper()} | Conf: {confianza}%")
+                    # 🔽 MODIFICADO: Ahora acepta desde 70% 🔽
+                    if señal and confianza >= 70:
+                        enviar_telegram(f"🚀 ENTRADA | {par} | {señal.upper()} | Conf: {confianza}%\n{info}")
                         
                         contract_id = bot.comprar(par, señal, MONTO_BASE)
 
