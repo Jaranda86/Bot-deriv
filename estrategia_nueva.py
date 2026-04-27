@@ -1,5 +1,5 @@
 # ==============================================
-# ESTRATEGIA NUEVA - SIN PANDA, SOLO PYTHON PURO
+# ESTRATEGIA NUEVA - VERSION MEJORADA v2.1
 # ==============================================
 
 class EstrategiaAvanzada:
@@ -70,17 +70,21 @@ class EstrategiaAvanzada:
         confianza = 0
 
         # 🟢 CONDICIONES PARA COMPRA (CALL)
-        # Precio arriba de la media rapida + RSI bajo + Tendencia alcista
-        if precio_actual > ma9 and rsi < 40 and ma9 > ma21:
+        # Precio arriba de la media rapida + RSI bajo/medio + Tendencia alcista
+        # 🔽 MODIFICADO: RSI < 50 en vez de <40 🔽
+        if precio_actual > ma9 and rsi < 50 and ma9 > ma21:
             señal = "call"
-            confianza = 85 + (40 - rsi)
+            # Confianza empieza en 75
+            confianza = 75 + (50 - rsi)
             if confianza > 98: confianza = 98
 
         # 🔴 CONDICIONES PARA VENTA (PUT)
-        # Precio abajo de la media rapida + RSI alto + Tendencia bajista
-        elif precio_actual < ma9 and rsi > 60 and ma9 < ma21:
+        # Precio abajo de la media rapida + RSI alto/medio + Tendencia bajista
+        # 🔽 MODIFICADO: RSI > 50 en vez de >60 🔽
+        elif precio_actual < ma9 and rsi > 50 and ma9 < ma21:
             señal = "put"
-            confianza = 85 + (rsi - 60)
+            # Confianza empieza en 75
+            confianza = 75 + (rsi - 50)
             if confianza > 98: confianza = 98
 
         info = f"RSI:{rsi:.1f} | MA9:{ma9:.4f} | MA21:{ma21:.4f}"
