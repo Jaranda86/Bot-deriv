@@ -69,12 +69,16 @@ def ejecutar_bot():
     print("🚀 BOT INICIADO - NUEVA ESTRATEGIA 🚀")
     enviar_telegram("🤖 <b>VERSION 2.1 ACTIVADA</b>\n✅ Logica Mejorada\n⏰ 11:00 a 14:00\n🛑 Stop Loss: $5.00")
 
-    # INICIALIZAMOS LA NUEVA ESTRATEGIA
+    # INICIALIZAMOS LA ESTRATEGIA (una sola vez)
     estrategia = EstrategiaAvanzada()
-
+    
+    # ==============================================
+    # 🔽 MODIFICACIÓN IMPORTANTE: CONEXIÓN FUERA DEL BUCLE 🔽
+    # ==============================================
+    bot = None 
+    
     while True:
-        bot = None
-        
+        # Si no está dentro de horario, dormir
         if not esta_dentro_horario():
             print("💤 Fuera de horario...")
             hora_actual = datetime.datetime.now()
@@ -83,14 +87,39 @@ def ejecutar_bot():
                 operaciones_hoy = {'ganadas': 0, 'perdidas': 0, 'total': 0.0}
                 perdidas_dia = 0
             time.sleep(300)
+            
+            # Si salimos de horario y había conexión, la cerramos
+            if bot:
+                try:
+                    bot.cerrar()
+                except:
+                    pass
+                bot = None
             continue
 
-        try:
-            bot = DerivBot()
-            if not bot.conectar():
+        # ==============================================
+        # Si estamos dentro de horario y NO hay conexión, conectamos
+        # ==============================================
+        if not bot:
+            try:
+                print("🔌 Conectando a Deriv...")
+                bot = DerivBot()
+                if not bot.conectar():
+                    print("❌ Error al conectar. Reintentando en 60s...")
+                    time.sleep(60)
+                    bot = None
+                    continue
+                print("✅ Conectado exitosamente!")
+            except Exception as e:
+                print(f"❌ Error de conexión: {e}")
                 time.sleep(60)
+                bot = None
                 continue
 
+        # ==============================================
+        # YA CONECTADOS: EMPEZAMOS A ANALIZAR
+        # ==============================================
+        try:
             for par in PARES:
                 try:
                     print(f"\n📊 ANALIZANDO {par}...")
@@ -106,7 +135,6 @@ def ejecutar_bot():
                     print(f"📊 Señal: {señal} | Confianza: {confianza}% | {info}")
 
                     # Solo entramos si hay señal y confianza alta
-                    # 🔽 MODIFICADO: Ahora acepta desde 70% 🔽
                     if señal and confianza >= 70:
                         enviar_telegram(f"🚀 ENTRADA | {par} | {señal.upper()} | Conf: {confianza}%\n{info}")
                         
@@ -138,21 +166,34 @@ def ejecutar_bot():
                             if perdidas_dia <= LIMITE_PERDIDA:
                                 enviar_telegram(f"🛑 LIMITE ALCANZADO - DETENIENDO")
                                 enviar_reporte()
-                                bot.cerrar()
+                                if bot: bot.cerrar()
                                 return
 
                     time.sleep(5)
 
                 except Exception as e:
-                    print(f"Error: {e}")
+                    print(f"⚠️ Error en par {par}: {e}")
+                    # Si el error es grave, podríamos forzar reconexión
+                    if "rate limit" in str(e).lower() or "autoriz" in str(e).lower():
+                        print("🔄 Posible problema de conexión. Reiniciando...")
+                        if bot: bot.cerrar()
+                        bot = None
+                        break
                     time.sleep(10)
 
-            bot.cerrar()
-            time.sleep(60)
+            # Fin del ciclo de pares, esperar 1 minuto antes de volver a revisar
+            if bot: # Solo esperar si la conexión sigue bien
+                time.sleep(60)
 
         except Exception as e:
-            print(f"Error Global: {e}")
-            if bot: bot.cerrar()
+            print(f"❌ Error Global: {e}")
+            # Si hay error grave, cerramos y reiniciamos conexión
+            if bot: 
+                try:
+                    bot.cerrar()
+                except:
+                    pass
+            bot = None
             time.sleep(60)
 
 if __name__ == "__main__":
