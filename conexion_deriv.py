@@ -1,166 +1,234 @@
-import websocket
 import json
-import os
 import time
-import sys
+import websocket
+import os
 
-# ✅ ASEGURAR QUE EL NOMBRE SEA EXACTO
 class DerivBot:
-
     def __init__(self):
-        self.token = os.getenv("DERIV_TOKEN")
+        # TOKEN DE TU CUENTA DERIV (ASEGÚRATE DE QUE ESTÉ EN LAS VARIABLES DE ENTORNO)
+        self.TOKEN = os.getenv("DERIV_TOKEN")
         self.ws = None
-        self.autorizado = False
+        self.connected = False
 
     def conectar(self):
+        """Establece conexión con el servidor de Deriv"""
         try:
-            if self.ws and self.autorizado:
-                print("✅ Ya conectado y autorizado", file=sys.stderr)
-                return True
-
-            print("🔌 INTENTANDO CONECTAR...", file=sys.stderr)
-            self.ws = websocket.create_connection(
-                "wss://ws.derivws.com/websockets/v3?app_id=1089",
-                timeout=30
-            )
-            
-            print("📤 ENVIANDO TOKEN...", file=sys.stderr)
-            self.ws.send(json.dumps({"authorize": self.token}))
-            response = json.loads(self.ws.recv())
-            
-            print(f"📥 RESPUESTA AUTORIZACIÓN: {response}", file=sys.stderr)
-
-            if "error" in response:
-                print(f"❌ ERROR: {response['error']['message']}", file=sys.stderr)
-                if "rate limit" in response['error']['message']:
-                    print("⏳ ESPERANDO 60 SEGUNDOS POR LÍMITE...", file=sys.stderr)
-                    time.sleep(60)
+            if not self.TOKEN:
+                print("❌ FALTA EL TOKEN DE DERIV")
                 return False
-                
-            print("✅ CONECTADO Y AUTORIZADO!", file=sys.stderr)
-            self.autorizado = True
+
+            print("🔌 Conectando a wss://ws.derivws.com/websockets/v3")
+            self.ws = websocket.WebSocketApp(
+                "wss://ws.derivws.com/websockets/v3",
+                on_open=self._on_open,
+                on_message=self._on_message,
+                on_error=self._on_error,
+                on_close=self._on_close
+            )
+
+            # Ejecutar en un hilo para no bloquear
+            import threading
+            self.thread = threading.Thread(target=self.ws.run_forever)
+            self.thread.daemon = True
+            self.thread.start()
+
+            # Esperar hasta 10 segundos a que se conecte
+            tiempo_espera = 10
+            for _ in range(tiempo_espera):
+                if self.connected:
+                    break
+                time.sleep(1)
+
+            if not self.connected:
+                print("❌ No se pudo establecer conexión después de 10 segundos")
+                return False
+
+            print("✅ Conexión establecida y autorizada")
             return True
-            
+
         except Exception as e:
-            print(f"💥 ERROR CONEXIÓN: {str(e)}", file=sys.stderr)
-            self.autorizado = False
-            print("⏳ ESPERANDO 15 SEGUNDOS...", file=sys.stderr)
-            time.sleep(15)
+            print(f"❌ Error al conectar: {e}")
             return False
 
-    def cerrar(self):
-        try:
-            if self.ws:
-                self.ws.close()
-                self.autorizado = False
-        except:
-            pass
+    def _on_open(self, ws):
+        """Se ejecuta al abrir la conexión"""
+        print("🔓 Conexión abierta, enviando autorización...")
+        ws.send(json.dumps({"authorize": self.TOKEN}))
 
-    def get_candles(self, symbol):
+    def _on_message(self, ws, mensaje):
+        """Procesa los mensajes recibidos"""
+        datos = json.loads(mensaje)
+        
+        if "authorize" in datos:
+            if datos["authorize"]:
+                print("✅ Autorización exitosa")
+                self.connected = True
+            else:
+                print(f"❌ Error de autorización: {datos.get('message', 'Unknown')}")
+                self.connected = False
+
+    def _on_error(self, ws, error):
+        print(f"❌ Error en la conexión: {error}")
+        self.connected = False
+
+    def _on_close(self, ws, close_code, close_reason):
+        print(f"🔌 Conexión cerrada | Código: {close_code} | Razón: {close_reason}")
+        self.connected = False
+
+    def get_candles(self, activo, cantidad=50, intervalo=60):
+        """Obtiene velas del activo especificado"""
         try:
-            print("📥 PIDIENDO VELAS...", file=sys.stderr)
-            self.ws.send(json.dumps({
-                "ticks_history": symbol,
-                "adjust_start_time": 1,
-                "count": 20,
+            if not self.connected:
+                print("⚠️ No hay conexión para pedir velas")
+                return []
+
+            print(f"📥 Solicitando {cantidad} velas de {activo}...")
+            solicitud = {
+                "ticks_history": activo,
+                "count": cantidad,
                 "end": "latest",
-                "granularity": 60,
-                "style": "candles"
-            }))
-            response = json.loads(self.ws.recv())
-            return response.get("candles", [])
-        except Exception as e:
-            print(f"❌ ERROR VELAS: {str(e)}", file=sys.stderr)
-            self.autorizado = False
+                "style": "candles",
+                "granularity": intervalo
+            }
+
+            # Enviar solicitud
+            self.ws.send(json.dumps(solicitud))
+
+            # Esperar respuesta
+            tiempo_maximo = 5
+            inicio = time.time()
+            while time.time() - inicio < tiempo_maximo:
+                # Capturar el mensaje (se hace mediante una variable temporal)
+                respuesta = None
+                def guardar_respuesta(ws, msg):
+                    nonlocal respuesta
+                    datos = json.loads(msg)
+                    if "candles" in datos:
+                        respuesta = datos["candles"]
+
+                # Asignar función temporal
+                funcion_original = self._on_message
+                self._on_message = guardar_respuesta
+
+                time.sleep(0.2)
+
+                # Restaurar función original
+                self._on_message = funcion_original
+
+                if respuesta is not None:
+                    print(f"✅ Recibidas {len(respuesta)} velas de {activo}")
+                    return respuesta
+
+            print(f"⚠️ No se recibieron velas de {activo} después de {tiempo_maximo}s")
             return []
 
-    def comprar(self, par, tipo, monto=0.35):
-        try:
-            accion = "CALL" if tipo.lower() == "call" else "PUT"
-            print(f"📤 ENVIANDO ORDEN: {par} | {accion} | ${monto}", file=sys.stderr)
+        except Exception as e:
+            print(f"❌ Error al obtener velas: {e}")
+            return []
 
-            orden = {
+    def comprar(self, activo, tipo, monto):
+        """Realiza una compra en Deriv"""
+        try:
+            if not self.connected:
+                print("⚠️ No hay conexión para realizar compra")
+                return None
+
+            print(f"💸 Comprando {tipo.upper()} en {activo} por {monto} USD...")
+            solicitud = {
                 "buy": 1,
-                "price": float(monto),
                 "parameters": {
-                    "amount": float(monto),
+                    "amount": monto,
                     "basis": "stake",
-                    "contract_type": accion,
+                    "contract_type": tipo.upper(),
                     "currency": "USD",
+                    "symbol": activo,
                     "duration": 1,
-                    "duration_unit": "m",
-                    "symbol": par
+                    "duration_unit": "m"
                 }
             }
 
-            self.ws.send(json.dumps(orden))
-            result = json.loads(self.ws.recv())
-            
-            print("="*60, file=sys.stderr)
-            print("📥 RESPUESTA DERIV COMPLETA:", file=sys.stderr)
-            print(json.dumps(result, indent=2), file=sys.stderr)
-            print("="*60, file=sys.stderr)
+            self.ws.send(json.dumps(solicitud))
 
-            if "error" in result:
-                print(f"💥 ERROR DERIV: {result['error']['message']}", file=sys.stderr)
-                if "rate limit" in result['error']['message']:
-                    print("⏳ ESPERANDO 60 SEG...", file=sys.stderr)
-                    time.sleep(60)
-                return None
-                
-            if "buy" in result:
-                return result["buy"].get("contract_id")
+            # Esperar respuesta
+            tiempo_maximo = 10
+            inicio = time.time()
+            contract_id = None
+
+            def capturar_compra(ws, msg):
+                nonlocal contract_id
+                datos = json.loads(msg)
+                if "buy" in datos:
+                    contract_id = datos["buy"]["contract_id"]
+                    print(f"✅ Compra realizada | ID: {contract_id}")
+
+            funcion_original = self._on_message
+            self._on_message = capturar_compra
+
+            while time.time() - inicio < tiempo_maximo and contract_id is None:
+                time.sleep(0.2)
+
+            self._on_message = funcion_original
+
+            if contract_id:
+                return contract_id
             else:
-                print("⚠️ NO HAY CONTRACT_ID", file=sys.stderr)
+                print("❌ No se pudo realizar la compra")
                 return None
 
         except Exception as e:
-            print(f"💥 ERROR EN COMPRAR: {str(e)}", file=sys.stderr)
-            self.autorizado = False
+            print(f"❌ Error al comprar: {e}")
             return None
 
     def check_result(self, contract_id):
+        """Verifica el resultado de una operación"""
         try:
-            print("⌛ ESPERANDO RESULTADO (MAX 80 SEGUNDOS)...", file=sys.stderr)
-            start_time = time.time()
-            profit = 0
+            if not self.connected:
+                print("⚠️ No hay conexión para verificar resultado")
+                return 0.0
 
-            while True:
-                if time.time() - start_time > 80:
-                    print("⏰ TIMEOUT ALCANZADO - INTENTANDO OBTENER RESULTADO...", file=sys.stderr)
-                    try:
-                        self.ws.send(json.dumps({
-                            "proposal_open_contract": 1,
-                            "contract_id": contract_id
-                        }))
-                        result = json.loads(self.ws.recv())
-                        if "proposal_open_contract" in result:
-                            contract = result["proposal_open_contract"]
-                            profit = float(contract.get("profit", 0))
-                            print(f"🏁 RESULTADO OBTENIDO! Profit = {profit}", file=sys.stderr)
-                            break
-                    except:
-                        print("❌ NO SE PUDO OBTENER RESULTADO FINAL", file=sys.stderr)
-                        profit = -1
-                    break
+            print(f"🔍 Verificando resultado de contrato {contract_id}...")
+            solicitud = {
+                "proposal_open_contract": 1,
+                "contract_id": contract_id
+            }
 
-                try:
-                    result = json.loads(self.ws.recv())
-                    if "proposal_open_contract" in result:
-                        contract = result["proposal_open_contract"]
-                        if contract.get("is_sold", False):
-                            profit = float(contract.get("profit", 0))
-                            print(f"🏁 RESULTADO LISTO! Profit = {profit}", file=sys.stderr)
-                            break
-                except Exception as e:
-                    print(f"🔄 RECONECTANDO... {str(e)}", file=sys.stderr)
-                    self.autorizado = False
-                    time.sleep(3)
-                    
-                time.sleep(2)
+            resultado = None
+            tiempo_maximo = 60
+            inicio = time.time()
 
-            return profit
+            def capturar_resultado(ws, msg):
+                nonlocal resultado
+                datos = json.loads(msg)
+                if "proposal_open_contract" in datos:
+                    contrato = datos["proposal_open_contract"]
+                    if contrato["is_sold"]:
+                        resultado = round(float(contrato["profit"]), 2)
+                        print(f"🏁 Operación finalizada | Ganancia/Pérdida: {resultado} USD")
+
+            funcion_original = self._on_message
+            self._on_message = capturar_resultado
+
+            while time.time() - inicio < tiempo_maximo and resultado is None:
+                time.sleep(0.5)
+
+            self._on_message = funcion_original
+
+            if resultado is not None:
+                return resultado
+            else:
+                print("⚠️ No se pudo obtener el resultado a tiempo")
+                return 0.0
 
         except Exception as e:
-            print(f"❌ ERROR RESULTADO: {str(e)}", file=sys.stderr)
-            return -1
+            print(f"❌ Error al verificar resultado: {e}")
+            return 0.0
+
+    def cerrar(self):
+        """Cierra la conexión"""
+        try:
+            if self.ws:
+                self.ws.close()
+            self.connected = False
+            print("🔌 Conexión cerrada correctamente")
+        except Exception as e:
+            print(f"⚠️ Error al cerrar conexión: {e}")
