@@ -1,4 +1,0 @@
-deriv
-requests
-numpy
-websocket-client
