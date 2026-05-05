@@ -13,26 +13,29 @@ class DerivAPI:
         self.lock = threading.Lock()
 
     def conectar(self):
-        url = f"wss://ws.derivws.com/websockets/v3?app_id={self.app_id}"
+        try:
+            url = f"wss://ws.derivws.com/websockets/v3?app_id={self.app_id}"
 
-        self.ws = websocket.WebSocketApp(
-            url,
-            on_open=self.on_open,
-            on_message=self.on_message,
-            on_close=self.on_close,
-            on_error=self.on_error
-        )
+            self.ws = websocket.WebSocketApp(
+                url,
+                on_open=self.on_open,
+                on_message=self.on_message,
+                on_close=self.on_close,
+                on_error=self.on_error
+            )
 
-        t = threading.Thread(target=self.ws.run_forever)
-        t.daemon = True
-        t.start()
+            t = threading.Thread(target=self.ws.run_forever)
+            t.daemon = True
+            t.start()
 
-        for _ in range(10):
-            if self.connected:
-                return True
-            time.sleep(1)
+            for _ in range(10):
+                if self.connected:
+                    return True
+                time.sleep(1)
 
-        return False
+            return False
+        except:
+            return False
 
     def on_open(self, ws):
         ws.send(json.dumps({"authorize": self.token}))
@@ -50,57 +53,86 @@ class DerivAPI:
             self.connected = False
 
     def on_close(self, ws, a, b):
-        print("🔌 Conexión cerrada")
+        print("🔌 Cerrado")
         self.connected = False
 
     def on_error(self, ws, e):
         print("❌ Error:", e)
         self.connected = False
 
+    def asegurar_conexion(self):
+        if not self.connected:
+            print("🔄 Reconectando...")
+            return self.conectar()
+        return True
+
     def get_velas(self, symbol, count=50):
-        self.ws.send(json.dumps({
-            "ticks_history": symbol,
-            "count": count,
-            "end": "latest",
-            "style": "candles",
-            "granularity": 60
-        }))
+        if not self.asegurar_conexion():
+            return []
+
+        try:
+            self.ws.send(json.dumps({
+                "ticks_history": symbol,
+                "count": count,
+                "end": "latest",
+                "style": "candles",
+                "granularity": 60
+            }))
+        except:
+            self.connected = False
+            return []
 
         for _ in range(20):
             time.sleep(0.3)
             with self.lock:
                 if self.last and "candles" in self.last:
                     return self.last["candles"]
+
         return []
 
     def comprar(self, symbol, tipo, monto):
-        self.ws.send(json.dumps({
-            "buy": 1,
-            "price": monto,
-            "parameters": {
-                "amount": monto,
-                "basis": "stake",
-                "contract_type": tipo.upper(),
-                "currency": "USD",
-                "symbol": symbol,
-                "duration": 1,
-                "duration_unit": "m"
-            }
-        }))
+        if not self.asegurar_conexion():
+            return None
+
+        try:
+            self.ws.send(json.dumps({
+                "buy": 1,
+                "price": monto,
+                "parameters": {
+                    "amount": monto,
+                    "basis": "stake",
+                    "contract_type": tipo.upper(),
+                    "currency": "USD",
+                    "symbol": symbol,
+                    "duration": 1,
+                    "duration_unit": "m"
+                }
+            }))
+        except:
+            self.connected = False
+            return None
 
         for _ in range(20):
             time.sleep(0.3)
             with self.lock:
                 if self.last and "buy" in self.last:
                     return self.last["buy"]["contract_id"]
+
         return None
 
     def resultado(self, contract_id):
-        self.ws.send(json.dumps({
-            "proposal_open_contract": 1,
-            "contract_id": contract_id,
-            "subscribe": 1
-        }))
+        if not self.asegurar_conexion():
+            return 0
+
+        try:
+            self.ws.send(json.dumps({
+                "proposal_open_contract": 1,
+                "contract_id": contract_id,
+                "subscribe": 1
+            }))
+        except:
+            self.connected = False
+            return 0
 
         for _ in range(120):
             time.sleep(0.5)
@@ -109,4 +141,5 @@ class DerivAPI:
                     c = self.last["proposal_open_contract"]
                     if c.get("is_sold"):
                         return float(c.get("profit", 0))
+
         return 0
