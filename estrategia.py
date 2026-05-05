@@ -27,7 +27,7 @@ def rsi(data, period=14):
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
-def señal_base(velas):
+def señal_con_ia(velas, ia):
     closes = [float(v["close"]) for v in velas]
 
     if len(closes) < 30:
@@ -38,31 +38,22 @@ def señal_base(velas):
     r = rsi(closes)
     precio = closes[-1]
 
-    # filtro lateral
-    if abs(e9 - e21) < 0.00005:
-        return None, 0
+    # 🔥 MÁS FLEXIBLE (ANTES ERA MUY ESTRICTO)
+    señal = None
 
-    if precio > e9 and e9 > e21 and r < 45:
-        return "call", 80 + (45 - r)
+    if precio > e21 and r < 55:
+        señal = "call"
 
-    if precio < e9 and e9 < e21 and r > 55:
-        return "put", 80 + (r - 55)
+    elif precio < e21 and r > 45:
+        señal = "put"
 
-    return None, 0
-
-
-def señal_con_ia(velas, ia):
-    closes = [float(v["close"]) for v in velas]
-
-    s, conf = señal_base(velas)
-
-    if not s:
+    if not señal:
         return None, 0
 
     prob = ia.predecir(closes)
-    print(f"🧠 IA probabilidad: {prob}")
+    print(f"🧠 IA: {prob}")
 
-    if prob > 0.6:
-        return s, conf + (prob * 20)
+    if prob > 0.55:
+        return señal, 70 + prob * 30
 
     return None, 0
