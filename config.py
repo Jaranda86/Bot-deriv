@@ -1,0 +1,18 @@
+import os
+
+DERIV_TOKEN = os.getenv("DERIV_TOKEN")
+APP_ID = os.getenv("DERIV_APP_ID", "1089")
+
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+
+PARES = ["R_50"]
+
+MONTO = 0.35
+STOP_LOSS = -5
+TAKE_PROFIT = 5
+
+CONF_MIN = 75
+
+HORA_INICIO = 8
+HORA_FIN = 20
